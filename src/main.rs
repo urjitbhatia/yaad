@@ -14,8 +14,8 @@ use flate2::read::DeflateDecoder;
 use bytes::{BytesMut, BufMut, IntoBuf};
 use std::time::Duration;
 
-mod spoke;
-mod job;
+pub mod spoke;
+pub mod job;
 
 fn main() {
 

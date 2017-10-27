@@ -24,6 +24,6 @@ mod tests {
     #[test]
     fn can_create_job() {
         let j = new_job(100u64, 150u64, "Test Body".to_owned());
-        assert!(j.internal_id == 100u64)
+        assert!(j.internal_id == 100u64);
     }
 }
