@@ -43,26 +43,24 @@ impl Spoke {
     }
 
     ///Walk returns an iterator that returns jobs in trigger order
+    ///
+    ///Call walk in a loop like an iterator on this spoke
     pub fn walk(&mut self) -> Option<&Job> {
         // None if no jobs in this spoke yet
         if self.job_list.len() == 0 {
             return None;
         }
         // Eagerly exhaust all jobs that are ready
-        loop {
-            let front_job = self.job_list.front();
-            match front_job {
-                None => {
-                    println!("No ready jobs");
-                    break;
-                }
-                Some(j) => {
-                    if SystemTime::now() >= j.trigger_at {
-                        return front_job;
-                    }
+        let front_job = self.job_list.front();
+        match front_job {
+            None => {
+                println!("No ready jobs");
+            }
+            Some(j) => {
+                if SystemTime::now() >= j.trigger_at {
+                    return front_job;
                 }
             }
-            break;
         }
         None
     }
