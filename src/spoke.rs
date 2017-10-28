@@ -1,6 +1,9 @@
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
 use std::collections::LinkedList;
 use std::fmt;
+use std::thread;
+use std::cmp::PartialOrd;
+
 use job::{Job, new_job};
 
 /// A Spoke is a time-bound chain of jobs
@@ -39,7 +42,30 @@ impl Spoke {
         self.job_list.push_back(job);
     }
 
-    pub fn walk(&mut self) {}
+    ///Walk returns an iterator that returns jobs in trigger order
+    pub fn walk(&mut self) -> Option<&Job> {
+        // None if no jobs in this spoke yet
+        if self.job_list.len() == 0 {
+            return None;
+        }
+        // Eagerly exhaust all jobs that are ready
+        loop {
+            let front_job = self.job_list.front();
+            match front_job {
+                None => {
+                    println!("No ready jobs");
+                    break;
+                }
+                Some(j) => {
+                    if SystemTime::now() >= j.trigger_at {
+                        return front_job;
+                    }
+                }
+            }
+            break;
+        }
+        None
+    }
 }
 
 impl fmt::Display for Spoke {
@@ -73,5 +99,34 @@ mod tests {
         assert!(s.job_list.len() == 1);
         s.add_job(new_job(1u64, 1u64, "Hello Second Job!".to_owned()));
         assert!(s.job_list.len() == 2);
+    }
+
+    #[test]
+    fn walk_empty_spoke() {
+        let mut s = Spoke::new(Duration::new(1, 0));
+        let res = s.walk();
+        match res {
+            None => assert!(true),
+            Some(_) => panic!("Should not return a job"),
+        }
+    }
+
+    #[test]
+    fn walk_spoke_with_job() {
+        let mut s = Spoke::new(Duration::new(10, 0));
+        s.add_job(new_job(1u64, 1u64, "Job with time trigger".to_owned()));
+        // wait 3/4 sec
+        thread::park_timeout(Duration::from_millis(750));
+        let res = s.walk();
+        match res {
+            None => {
+                println!("Test Found no job");
+                panic!("Test should have found 1 ready job")
+            }
+            Some(j) => {
+                println!("Test Found job: {:?}", j);
+                assert!(true);
+            }
+        }
     }
 }

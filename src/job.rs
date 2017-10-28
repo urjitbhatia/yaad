@@ -1,3 +1,5 @@
+use std::time::{SystemTime, Duration};
+use std::ops::Add;
 /*
 The "Job" type - max possible values: u64::max_value() = 18446744073709551615.
 internal_id will overflow after max value - internal functioning should not be affected.
@@ -5,15 +7,19 @@ internal_id will overflow after max value - internal functioning should not be a
 //#[derive(Serialize, Deserialize, Debug)]
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct Job {
-    internal_id: u64,
+    pub internal_id: u64,
     external_id: u64,
+    pub trigger_at: SystemTime,
     body: String,
 }
 
 pub fn new_job(internal_id: u64, external_id: u64, body: String) -> Job {
+    //! TODO - using a default 1/2 sec trigger time right now
+    let trigger_at = SystemTime::now().add(Duration::from_millis(500));
     return Job {
         internal_id: internal_id,
         external_id: external_id,
+        trigger_at: trigger_at,
         body: body,
     };
 }
