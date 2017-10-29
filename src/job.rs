@@ -18,12 +18,8 @@ pub struct Job {
 
 impl Job {
     pub fn new(internal_id: u64, external_id: u64, trigger_at_ms: u64, body: String) -> Job {
-        Job {
-            internal_id: internal_id,
-            external_id: external_id,
-            trigger_at: SystemTime::now().add(Duration::from_millis(trigger_at_ms)),
-            body: body,
-        }
+        let trigger_at = SystemTime::now().add(Duration::from_millis(trigger_at_ms));
+        Job { internal_id, external_id, trigger_at, body }
     }
 
     pub fn is_ready(self) -> bool {
@@ -37,7 +33,9 @@ impl Ord for Job {
         other.trigger_at.cmp(&self.trigger_at)
     }
 }
+
 impl Eq for Job {}
+
 impl PartialOrd for Job {
     fn partial_cmp(&self, other: &Job) -> Option<Ordering> {
         Some(self.cmp(other))

@@ -27,11 +27,7 @@ impl Spoke {
 
         println!("Job list ref: {:p}", &job_list);
 
-        Spoke {
-            start_time: start_time,
-            duration: duration,
-            job_list: job_list,
-        }
+        Spoke { start_time, duration, job_list }
     }
 
     ///# Example
