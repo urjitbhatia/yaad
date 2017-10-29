@@ -6,8 +6,7 @@ use std::cmp::Ordering;
 The "Job" type - max possible values: u64::max_value() = 18446744073709551615.
 internal_id will overflow after max value - internal functioning should not be affected.
 */
-//#[derive(Serialize, Deserialize, Debug)]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
 pub struct Job {
     pub internal_id: u64,
     external_id: u64,

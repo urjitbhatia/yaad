@@ -1,11 +1,9 @@
-use std::time::{SystemTime, Duration, UNIX_EPOCH};
-use std::collections::{LinkedList, VecDeque};
+use std::time::{SystemTime, Duration};
 use std::collections::BinaryHeap;
 use std::collections::binary_heap::PeekMut;
 use std::fmt;
-use std::iter;
-use std::thread;
-use std::cmp::PartialOrd;
+
+// our module
 use job::Job;
 
 /// A Spoke is a time-bound chain of jobs
