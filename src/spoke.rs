@@ -25,9 +25,11 @@ impl Spoke {
         let start_time = SystemTime::now();
         let job_list = BinaryHeap::new();
 
-        println!("Job list ref: {:p}", &job_list);
-
-        Spoke { start_time, duration, job_list }
+        Spoke {
+            start_time,
+            duration,
+            job_list,
+        }
     }
 
     ///# Example
@@ -37,9 +39,7 @@ impl Spoke {
     ///use Spoke;
     ///let s = Spoke::new(Duration::new(10, 0));
     ///```
-
     pub fn add_job(&mut self, job: Job) {
-        println!("Job list ref add_job: {:p}", &self.job_list);
         self.job_list.push(job);
     }
 
@@ -50,9 +50,11 @@ impl Spoke {
         let mut ready_jobs: Vec<Job> = vec![];
 
         while let Some(peeked) = self.job_list.peek_mut() {
-            if peeked.trigger_at <= SystemTime::now() {
+            if peeked.is_ready() {
                 let j = PeekMut::pop(peeked);
                 ready_jobs.push(j)
+            } else {
+                break;
             }
         }
         ready_jobs
@@ -79,21 +81,23 @@ impl fmt::Display for Spoke {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Job, Spoke};
+    use super::{SystemTime, Duration};
+    use super::thread;
 
     #[test]
     fn can_create_spoke() {
         let s = Spoke::new(Duration::new(10, 0));
-        assert!(s.job_list.len() == 0);
+        assert_eq!(s.job_list.len(), 0);
     }
 
     #[test]
     fn can_add_jobs() {
-        let mut s = Spoke::new(Duration::new(10, 0));
-        s.add_job(Job::new(2u64, 2u64, 500u64, "Hello Second Job!".to_owned()));
-        assert!(s.job_list.len() == 1);
-        s.add_job(Job::new(1u64, 1u64, 500u64, "Hello Second Job!".to_owned()));
-        assert!(s.job_list.len() == 2);
+        let mut s: Spoke = Spoke::new(Duration::new(10, 0));
+        s.add_job(Job::new(2u64, 2u64, 500u64, "Hello Second Job!"));
+        assert_eq!(s.job_list.len(), 1);
+        s.add_job(Job::new(1u64, 1u64, 500u64, "Hello Second Job!"));
+        assert_eq!(s.job_list.len(), 2);
     }
 
     #[test]
@@ -108,33 +112,35 @@ mod tests {
     #[test]
     fn walk_spoke_with_jobs() {
         let mut s = Spoke::new(Duration::new(10, 0));
-        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job".to_owned()));
-        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job".to_owned()));
+        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
+        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
         // wait 3/4 sec
         thread::park_timeout(Duration::from_millis(750));
         let res = s.walk();
-        assert!(res.len() == 2, "Test should have found 2 jobs ready");
+        assert_eq!(res.len(), 2, "Test should have found 2 jobs ready");
     }
 
     #[test]
     fn walk_spoke_with_jobs_idempotent() {
         let mut s = Spoke::new(Duration::new(10, 0));
         println!("Spoke list idempotent: {:p}", &s);
-        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job".to_owned()));
+        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
         println!("Spoke list idempotent: {:p}", &s);
-        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job".to_owned()));
+        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
         // wait 3/4 sec
         thread::park_timeout(Duration::from_millis(750));
         let first_job_set = s.walk();
-        assert!(
-            first_job_set.len() == 2,
+        assert_eq!(
+            first_job_set.len(),
+            2,
             "Test should have found 2 jobs ready"
         );
         println!("Walk 1 done, pending job len: {:?}", s.pending_job_len());
 
         let second_job_set = s.walk();
-        assert!(
-            second_job_set.len() == 0,
+        assert_eq!(
+            second_job_set.len(),
+            0,
             "Test should have found 0 jobs ready"
         );
         println!("Walk 2 done, pending job len: {:?}", s.pending_job_len());
