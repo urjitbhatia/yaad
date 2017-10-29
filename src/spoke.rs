@@ -4,7 +4,7 @@ use std::fmt;
 use std::iter;
 use std::thread;
 use std::cmp::PartialOrd;
-use job::{Job, new_job};
+use job::Job;
 
 /// A Spoke is a time-bound chain of jobs
 ///
@@ -23,11 +23,11 @@ impl Spoke {
         let start_time = SystemTime::now();
         let mut job_list = LinkedList::new();
 
-        return Spoke {
+        Spoke {
             start_time: start_time,
             duration: duration,
             job_list: job_list,
-        };
+        }
     }
 
     ///# Example
@@ -80,9 +80,9 @@ mod tests {
     #[test]
     fn can_add_jobs() {
         let mut s = Spoke::new(Duration::new(10, 0));
-        s.add_job(new_job(2u64, 2u64, "Hello Second Job!".to_owned()));
+        s.add_job(Job::new(2u64, 2u64, 500u64, "Hello Second Job!".to_owned()));
         assert!(s.job_list.len() == 1);
-        s.add_job(new_job(1u64, 1u64, "Hello Second Job!".to_owned()));
+        s.add_job(Job::new(1u64, 1u64, 500u64, "Hello Second Job!".to_owned()));
         assert!(s.job_list.len() == 2);
     }
 
@@ -98,8 +98,18 @@ mod tests {
     #[test]
     fn walk_spoke_with_jobs() {
         let mut s = Spoke::new(Duration::new(10, 0));
-        s.add_job(new_job(1u64, 1u64, "Job with time trigger".to_owned()));
-        s.add_job(new_job(1u64, 1u64, "Job with time trigger".to_owned()));
+        s.add_job(Job::new(
+            1u64,
+            1u64,
+            500u64,
+            "Job with time trigger".to_owned(),
+        ));
+        s.add_job(Job::new(
+            1u64,
+            1u64,
+            500u64,
+            "Job with time trigger".to_owned(),
+        ));
         // wait 3/4 sec
         thread::park_timeout(Duration::from_millis(750));
         let res = s.walk();
