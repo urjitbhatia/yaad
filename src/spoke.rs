@@ -3,6 +3,9 @@ use std::collections::BinaryHeap;
 use std::collections::binary_heap::PeekMut;
 use std::fmt;
 
+// traits
+use std::ops::Add;
+
 // our module
 use job::Job;
 
@@ -19,6 +22,14 @@ pub struct Spoke {
 
 impl Spoke {
     /// Constructs a new Spoke - a time bound chain of jobs
+    ///# Example
+    ///Create a spoke that starts at 5 sec, 0 ns from now
+    ///
+    ///```
+    ///use Spoke;
+    ///let s = Spoke::new(Duration::new(5, 0));
+    ///s.add_job(Job::new(1, 2, 3, "hi");
+    ///```
     pub fn new(duration: Duration) -> Spoke {
         let start_time = SystemTime::now();
         let job_list = BinaryHeap::new();
@@ -30,15 +41,20 @@ impl Spoke {
         }
     }
 
-    ///# Example
-    ///Create a spoke that starts at 5 sec, 0 ns from now
+    /// Add a new job into the Spoke
     ///
-    ///```
-    ///use Spoke;
-    ///let s = Spoke::new(Duration::new(10, 0));
-    ///```
-    pub fn add_job(&mut self, job: Job) {
-        self.job_list.push(job);
+    /// The spoke can reject a job if it doesn't lie in it's time bounds
+    pub fn add_job(&mut self, job: Job) -> Option<Job> {
+        if self.start_time <= job.trigger_at() &&
+            job.trigger_at() <= self.start_time.add(self.duration) {
+            // Only accept jobs that are this spoke's responsibility
+            println!("Accepting job");
+            self.job_list.push(job);
+            return Option::None;
+        } else {
+            // Return jobs that you don't want to accept
+            return Option::from(job);
+        }
     }
 
     ///Walk returns an iterator that returns jobs in trigger order
@@ -141,5 +157,19 @@ mod tests {
             "Test should have found 0 jobs ready"
         );
         println!("Walk 2 done, pending job len: {:?}", s.pending_job_len());
+    }
+
+    #[test]
+    fn reject_outoftimebound_jobs() {
+        let mut s: Spoke = Spoke::new(Duration::from_millis(2000));
+
+        let j_accept: Job = Job::new_without_external_id(1, 100, "one");
+        let jj_accept: Job = Job::new_without_external_id(1, 200, "two");
+
+        let j_reject: Job = Job::new_without_external_id(1, 4400, "three");
+
+        assert!(s.add_job(j_accept).is_none());
+        assert!(s.add_job(jj_accept).is_none());
+        assert!(s.add_job(j_reject).is_some());
     }
 }
