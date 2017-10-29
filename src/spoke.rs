@@ -91,11 +91,7 @@ mod tests {
         let mut s = Spoke::new(Duration::new(1, 0));
         let res = s.walk();
         for j in res {
-            assert!(true);
-            //            match j {
-            //                None =>
-            //                Some(_) => panic!("Should not return a job"),
-            //            }
+            panic!("Empty spoke should have no jobs");
         }
     }
 
