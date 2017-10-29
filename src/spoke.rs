@@ -80,13 +80,13 @@ impl fmt::Display for Spoke {
 #[cfg(test)]
 mod tests {
     use super::{Job, Spoke};
-    use super::{SystemTime, Duration};
-    use super::thread;
+    use std::time::Duration;
+    use std::thread;
 
     #[test]
     fn can_create_spoke() {
         let s = Spoke::new(Duration::new(10, 0));
-        assert_eq!(s.job_list.len(), 0);
+        assert_eq!(s.job_list.len(), 0)
     }
 
     #[test]
@@ -95,16 +95,14 @@ mod tests {
         s.add_job(Job::new(2u64, 2u64, 500u64, "Hello Second Job!"));
         assert_eq!(s.job_list.len(), 1);
         s.add_job(Job::new(1u64, 1u64, 500u64, "Hello Second Job!"));
-        assert_eq!(s.job_list.len(), 2);
+        assert_eq!(s.job_list.len(), 2)
     }
 
     #[test]
     fn walk_empty_spoke() {
         let mut s = Spoke::new(Duration::new(1, 0));
         let res = s.walk();
-        for j in res {
-            panic!("Empty spoke should have no jobs");
-        }
+        assert_eq!(res.len(), 0, "Empty spoke should have no jobs")
     }
 
     #[test]
@@ -115,7 +113,7 @@ mod tests {
         // wait 3/4 sec
         thread::park_timeout(Duration::from_millis(750));
         let res = s.walk();
-        assert_eq!(res.len(), 2, "Test should have found 2 jobs ready");
+        assert_eq!(res.len(), 2, "Test should have found 2 jobs ready")
     }
 
     #[test]
