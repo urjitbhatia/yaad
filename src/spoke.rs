@@ -111,7 +111,7 @@ impl Ord for Spoke {
     /// A Spoke is greater than another spoke if it's start time is further out in the future
     /// and it's end time is strictly less than the other's start time.
     fn cmp(&self, other: &Spoke) -> Ordering {
-        // Flip ordering - we want min heap (other.cmp(self)) rather than self.cmp(other)
+        // Flip ordering
         self.start_time.cmp(&other.start_time)
             .then(self.end_time.cmp(&other.end_time)).reverse()
     }
@@ -209,5 +209,13 @@ mod tests {
         assert!(s.add_job(j_accept).is_none());
         assert!(s.add_job(jj_accept).is_none());
         assert!(s.add_job(j_reject).is_some());
+    }
+
+    #[test]
+    fn spoke_ordering() {
+        let one = Spoke::new(Duration::from_millis(5));
+        thread::park_timeout(Duration::from_millis(10));
+        let two = Spoke::new(Duration::from_millis(5));
+        assert!(one > two, "Spoke with time interval closer to now should be greater");
     }
 }
