@@ -99,7 +99,7 @@ mod tests {
 
         thread::park_timeout(Duration::from_millis(10));
         assert_eq!(h.spokes.len(), 2);
-        let walk_one =h.walk();
+        let walk_one = h.walk();
         assert_eq!(walk_one.len(), 2, "Hub should now both spokes that are ready to go");
         assert!(walk_one[0] > walk_one[1], "Hub returns spokes in order of closest to first");
     }
