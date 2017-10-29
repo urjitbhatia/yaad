@@ -3,6 +3,7 @@ use std::time::Duration;
 // our modules
 pub mod spoke;
 pub mod job;
+pub mod hub;
 
 fn main() {
     let mut spokes = spoke::Spoke::new(Duration::new(5, 0));
