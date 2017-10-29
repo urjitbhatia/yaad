@@ -22,7 +22,7 @@ pub struct Spoke {
 }
 
 impl Spoke {
-    /// Constructs a new Spoke - a time bound chain of jobs
+    /// Constructs a new Spoke - a time bound chain of jobs starting at the current time
     ///# Example
     ///Create a spoke that starts at 5 sec, 0 ns from now
     ///
@@ -31,9 +31,21 @@ impl Spoke {
     ///let s = Spoke::new(Duration::new(5, 0));
     ///s.add_job(Job::new(1, 2, 3, "hi");
     ///```
-    pub fn new(duration: Duration) -> Spoke {
-        let start_time = SystemTime::now();
-        let end_time = start_time.add(duration);
+    fn new_fromnow(duration_ms: u64) -> Spoke {
+        Spoke::new(SystemTime::now(), duration_ms)
+    }
+
+    /// Constructs a new Spoke - a time bound chain of jobs starting at the current time
+    ///# Example
+    ///Create a spoke that starts at 5 sec, 0 ns from now
+    ///
+    ///```
+    ///use Spoke;
+    ///let s = Spoke::new(Duration::new(5, 0));
+    ///s.add_job(Job::new(1, 2, 3, "hi");
+    ///```
+    pub fn new(start_time: SystemTime, duration_ms: u64) -> Spoke {
+        let end_time = start_time.add(Duration::from_millis(duration_ms));
         let job_list = BinaryHeap::new();
 
         Spoke {
@@ -140,13 +152,13 @@ mod tests {
 
     #[test]
     fn can_create_spoke() {
-        let s: Spoke = Spoke::new(Duration::new(10, 0));
+        let s: Spoke = Spoke::new_fromnow(10);
         assert_eq!(s.job_list.len(), 0)
     }
 
     #[test]
     fn can_add_jobs() {
-        let mut s: Spoke = Spoke::new(Duration::new(10, 0));
+        let mut s: Spoke = Spoke::new_fromnow(10_000);
         s.add_job(Job::new(2u64, 2u64, 500u64, "Hello Second Job!"));
         assert_eq!(s.job_list.len(), 1);
         s.add_job(Job::new(1u64, 1u64, 500u64, "Hello Second Job!"));
@@ -155,14 +167,14 @@ mod tests {
 
     #[test]
     fn walk_empty_spoke() {
-        let mut s: Spoke = Spoke::new(Duration::new(1, 0));
+        let mut s: Spoke = Spoke::new_fromnow(1000);
         let res = s.walk();
         assert_eq!(res.len(), 0, "Empty spoke should have no jobs")
     }
 
     #[test]
     fn walk_spoke_with_jobs() {
-        let mut s: Spoke = Spoke::new(Duration::new(10, 0));
+        let mut s: Spoke = Spoke::new_fromnow(10_000);
         s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
         s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
         // wait 3/4 sec
@@ -173,7 +185,7 @@ mod tests {
 
     #[test]
     fn walk_spoke_with_jobs_idempotent() {
-        let mut s: Spoke = Spoke::new(Duration::new(10, 0));
+        let mut s: Spoke = Spoke::new_fromnow(10_000);
         println!("Spoke list idempotent: {:p}", &s);
         s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
         println!("Spoke list idempotent: {:p}", &s);
@@ -199,7 +211,7 @@ mod tests {
 
     #[test]
     fn reject_outoftimebounds_jobs() {
-        let mut s: Spoke = Spoke::new(Duration::from_millis(2000));
+        let mut s: Spoke = Spoke::new_fromnow(2000);
 
         let j_accept: Job = Job::new_without_external_id(1, 100, "one");
         let jj_accept: Job = Job::new_without_external_id(1, 200, "two");
@@ -213,9 +225,9 @@ mod tests {
 
     #[test]
     fn spoke_ordering() {
-        let one = Spoke::new(Duration::from_millis(5));
+        let one = Spoke::new_fromnow(5);
         thread::park_timeout(Duration::from_millis(10));
-        let two = Spoke::new(Duration::from_millis(5));
+        let two = Spoke::new_fromnow(5);
         assert!(one > two, "Spoke with time interval closer to now should be greater");
     }
 }
