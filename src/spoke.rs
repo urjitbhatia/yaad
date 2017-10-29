@@ -2,6 +2,7 @@ use std::time::{SystemTime, Duration};
 use std::collections::BinaryHeap;
 use std::collections::binary_heap::PeekMut;
 use std::fmt;
+use std::cmp::Ordering;
 
 // traits
 use std::ops::Add;
@@ -16,7 +17,7 @@ use job::Job;
 /// by this spoke.
 pub struct Spoke {
     start_time: SystemTime,
-    duration: Duration,
+    end_time: SystemTime,
     job_list: BinaryHeap<Job>,
 }
 
@@ -32,11 +33,12 @@ impl Spoke {
     ///```
     pub fn new(duration: Duration) -> Spoke {
         let start_time = SystemTime::now();
+        let end_time = start_time.add(duration);
         let job_list = BinaryHeap::new();
 
         Spoke {
             start_time,
-            duration,
+            end_time,
             job_list,
         }
     }
@@ -46,7 +48,7 @@ impl Spoke {
     /// The spoke can reject a job if it doesn't lie in it's time bounds
     pub fn add_job(&mut self, job: Job) -> Option<Job> {
         if self.start_time <= job.trigger_at() &&
-            job.trigger_at() <= self.start_time.add(self.duration) {
+            job.trigger_at() < self.end_time {
             // Only accept jobs that are this spoke's responsibility
             println!("Accepting job");
             self.job_list.push(job);
@@ -78,6 +80,18 @@ impl Spoke {
     pub fn pending_job_len(&self) -> usize {
         self.job_list.len()
     }
+
+    #[inline]
+    pub fn is_ready(&self) -> bool {
+        let now = SystemTime::now();
+        self.start_time <= now && now < self.end_time
+    }
+
+    #[inline]
+    pub fn is_expired(&self) -> bool {
+        let now = SystemTime::now();
+        self.end_time < now
+    }
 }
 
 impl fmt::Display for Spoke {
@@ -86,13 +100,37 @@ impl fmt::Display for Spoke {
             f,
             "(Start time: {:?}, Duration: {:?} sec, NumJobs: {}, JobList: {:?})",
             self.start_time,
-            self.duration,
+            self.end_time,
             self.job_list.len(),
             self.job_list
         )
     }
 }
 
+impl Ord for Spoke {
+    /// A Spoke is greater than another spoke if it's start time is further out in the future
+    /// and it's end time is strictly less than the other's start time.
+    fn cmp(&self, other: &Spoke) -> Ordering {
+        // Flip ordering - we want min heap (other.cmp(self)) rather than self.cmp(other)
+        self.start_time.cmp(&other.start_time)
+            .then(self.end_time.cmp(&other.end_time)).reverse()
+    }
+}
+
+impl Eq for Spoke {}
+
+impl PartialOrd for Spoke {
+    fn partial_cmp(&self, other: &Spoke) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Spoke {
+    fn eq(&self, other: &Spoke) -> bool {
+        self.start_time.eq(&other.start_time) &&
+            self.end_time.eq(&other.end_time)
+    }
+}
 
 #[cfg(test)]
 mod tests {

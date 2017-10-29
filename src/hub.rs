@@ -1,10 +1,10 @@
 use std::collections::BinaryHeap;
 use std::collections::binary_heap::PeekMut;
 
-use self::super::{job, spoke};
+use spoke::Spoke;
 
 pub struct Hub {
-    spokes: BinaryHeap<spoke::Spoke>,
+    spokes: BinaryHeap<Spoke>,
 }
 
 impl Hub {
