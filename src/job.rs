@@ -38,6 +38,10 @@ impl Job {
         }
     }
 
+    #[inline]
+    pub fn trigger_at(&self) -> SystemTime { self.trigger_at }
+
+    #[inline]
     pub fn is_ready(&self) -> bool {
         self.trigger_at <= SystemTime::now()
     }

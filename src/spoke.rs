@@ -58,6 +58,7 @@ impl Spoke {
         ready_jobs
     }
 
+    #[inline]
     pub fn pending_job_len(&self) -> usize {
         self.job_list.len()
     }
@@ -85,7 +86,7 @@ mod tests {
 
     #[test]
     fn can_create_spoke() {
-        let s = Spoke::new(Duration::new(10, 0));
+        let s: Spoke = Spoke::new(Duration::new(10, 0));
         assert_eq!(s.job_list.len(), 0)
     }
 
@@ -100,14 +101,14 @@ mod tests {
 
     #[test]
     fn walk_empty_spoke() {
-        let mut s = Spoke::new(Duration::new(1, 0));
+        let mut s: Spoke = Spoke::new(Duration::new(1, 0));
         let res = s.walk();
         assert_eq!(res.len(), 0, "Empty spoke should have no jobs")
     }
 
     #[test]
     fn walk_spoke_with_jobs() {
-        let mut s = Spoke::new(Duration::new(10, 0));
+        let mut s: Spoke = Spoke::new(Duration::new(10, 0));
         s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
         s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
         // wait 3/4 sec
@@ -118,7 +119,7 @@ mod tests {
 
     #[test]
     fn walk_spoke_with_jobs_idempotent() {
-        let mut s = Spoke::new(Duration::new(10, 0));
+        let mut s: Spoke = Spoke::new(Duration::new(10, 0));
         println!("Spoke list idempotent: {:p}", &s);
         s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job"));
         println!("Spoke list idempotent: {:p}", &s);
