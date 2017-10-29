@@ -1,5 +1,7 @@
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
 use std::collections::{LinkedList, VecDeque};
+use std::collections::BinaryHeap;
+use std::collections::binary_heap::PeekMut;
 use std::fmt;
 use std::iter;
 use std::thread;
@@ -14,14 +16,16 @@ use job::Job;
 pub struct Spoke {
     start_time: SystemTime,
     duration: Duration,
-    job_list: LinkedList<Job>,
+    job_list: BinaryHeap<Job>,
 }
 
 impl Spoke {
     /// Constructs a new Spoke - a time bound chain of jobs
     pub fn new(duration: Duration) -> Spoke {
         let start_time = SystemTime::now();
-        let mut job_list = LinkedList::new();
+        let job_list = BinaryHeap::new();
+
+        println!("Job list ref: {:p}", &job_list);
 
         Spoke {
             start_time: start_time,
@@ -39,17 +43,27 @@ impl Spoke {
     ///```
 
     pub fn add_job(&mut self, job: Job) {
-        self.job_list.push_back(job);
+        println!("Job list ref add_job: {:p}", &self.job_list);
+        self.job_list.push(job);
     }
 
     ///Walk returns an iterator that returns jobs in trigger order
     ///
     ///Call walk in a loop like an iterator on this spoke
-    pub fn walk(&mut self) -> Vec<&Job> {
-        self.job_list
-            .iter()
-            .take_while(|j| j.trigger_at <= SystemTime::now())
-            .collect()
+    pub fn walk(&mut self) -> Vec<Job> {
+        let mut ready_jobs: Vec<Job> = vec![];
+
+        while let Some(peeked) = self.job_list.peek_mut() {
+            if peeked.trigger_at <= SystemTime::now() {
+                let j = PeekMut::pop(peeked);
+                ready_jobs.push(j)
+            }
+        }
+        ready_jobs
+    }
+
+    pub fn pending_job_len(&self) -> usize {
+        self.job_list.len()
     }
 }
 
@@ -98,21 +112,35 @@ mod tests {
     #[test]
     fn walk_spoke_with_jobs() {
         let mut s = Spoke::new(Duration::new(10, 0));
-        s.add_job(Job::new(
-            1u64,
-            1u64,
-            500u64,
-            "Job with time trigger".to_owned(),
-        ));
-        s.add_job(Job::new(
-            1u64,
-            1u64,
-            500u64,
-            "Job with time trigger".to_owned(),
-        ));
+        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job".to_owned()));
+        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job".to_owned()));
         // wait 3/4 sec
         thread::park_timeout(Duration::from_millis(750));
         let res = s.walk();
         assert!(res.len() == 2, "Test should have found 2 jobs ready");
+    }
+
+    #[test]
+    fn walk_spoke_with_jobs_idempotent() {
+        let mut s = Spoke::new(Duration::new(10, 0));
+        println!("Spoke list idempotent: {:p}", &s);
+        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job".to_owned()));
+        println!("Spoke list idempotent: {:p}", &s);
+        s.add_job(Job::new(1u64, 1u64, 500u64, "I am Job".to_owned()));
+        // wait 3/4 sec
+        thread::park_timeout(Duration::from_millis(750));
+        let first_job_set = s.walk();
+        assert!(
+            first_job_set.len() == 2,
+            "Test should have found 2 jobs ready"
+        );
+        println!("Walk 1 done, pending job len: {:?}", s.pending_job_len());
+
+        let second_job_set = s.walk();
+        assert!(
+            second_job_set.len() == 0,
+            "Test should have found 0 jobs ready"
+        );
+        println!("Walk 2 done, pending job len: {:?}", s.pending_job_len());
     }
 }
