@@ -160,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn reject_outoftimebound_jobs() {
+    fn reject_outoftimebounds_jobs() {
         let mut s: Spoke = Spoke::new(Duration::from_millis(2000));
 
         let j_accept: Job = Job::new_without_external_id(1, 100, "one");
