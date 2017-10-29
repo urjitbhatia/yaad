@@ -50,8 +50,9 @@ impl Job {
 impl Ord for Job {
     /// A Job is greater than another job if the job's trigger time is further out in the future
     fn cmp(&self, other: &Job) -> Ordering {
-        // Flip ordering - we want min heap (other.cmp(self)) rather than self.cmp(other)
-        other.trigger_at.cmp(&self.trigger_at)
+        // Flip ordering - we want min heap
+        // Close trigger time means job > further trigger_at time.
+        self.trigger_at.cmp(&other.trigger_at).reverse()
     }
 }
 
@@ -73,10 +74,10 @@ impl PartialEq for Job {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::Job;
+    use std::cmp::Ordering;
 
     #[test]
     fn can_create_job() {
@@ -147,5 +148,23 @@ mod tests {
             j_one,
             j_two
         )
+    }
+
+    #[test]
+    fn job_ordering_test() {
+        let one = Job::new(1, 1, 1, "one");
+        let two = Job::new(2, 2, 2, "two");
+        assert!(one > two, "A job with trigger time close to in the future is smaller in ordering");
+
+        let one = Job::new(1, 1, 2, "one");
+        let two = Job::new(2, 2, 1, "two");
+        assert!(one < two, "A job with trigger time close to in the future is greater in ordering");
+
+        let one = Job::new(1, 1, 2, "one");
+        let two = Job::new(2, 2, 2, "two");
+        assert_eq!(one.cmp(&two), Ordering::Equal,
+                   "When two jobs have same trigger_at time, ordering comparison is Equal");
+        assert!(one.ne(&two),
+                   "When two jobs have same trigger_at time, equality comparison is not affected");
     }
 }
