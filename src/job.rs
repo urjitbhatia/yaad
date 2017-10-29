@@ -26,6 +26,18 @@ impl Job {
         }
     }
 
+    pub fn new_without_external_id(internal_id: u64, trigger_at_ms: u64, body: &str) -> Job {
+        let trigger_at = SystemTime::now().add(Duration::from_millis(trigger_at_ms));
+        let body = body.to_owned();
+        let external_id = 0u64;
+        Job {
+            internal_id,
+            external_id,
+            trigger_at,
+            body,
+        }
+    }
+
     pub fn is_ready(&self) -> bool {
         self.trigger_at <= SystemTime::now()
     }
@@ -50,6 +62,9 @@ impl PartialOrd for Job {
 impl PartialEq for Job {
     /// A job's equality depends on the equality of either internal or external id
     fn eq(&self, other: &Job) -> bool {
+        if self.external_id == 0 || other.external_id == 0 {
+            return self.internal_id == other.internal_id;
+        }
         self.internal_id == other.internal_id || self.external_id == other.external_id
     }
 }
@@ -72,7 +87,7 @@ mod tests {
         assert_eq!(
             j_one,
             j_two,
-            "Job: {:?} should be equal to: {:?} Same internal id, diff external id",
+            "Job: {:?} should eq: {:?} Same internal id, diff external id",
             j_one,
             j_two
         )
@@ -85,7 +100,7 @@ mod tests {
         assert_eq!(
             j_one,
             j_two,
-            "Job: {:?} should be equal to: {:?} Same external id, diff internal id",
+            "Job: {:?} should eq: {:?} Same external id, diff internal id",
             j_one,
             j_two
         )
@@ -98,7 +113,33 @@ mod tests {
         assert_eq!(
             j_one,
             j_two,
-            "Job: {:?} should be equal to: {:?} Same external id, same internal id, diff trigger_at",
+            "Job: {:?} should eq: {:?} Same external id, same internal id, diff trigger_at",
+            j_one,
+            j_two
+        )
+    }
+
+    #[test]
+    fn eq_missing_external_id_equality() {
+        let j_one = Job::new_without_external_id(100u64, 5u64, "foo one");
+        let j_two = Job::new(100u64, 100u64, 6u64, "foo two");
+        assert_eq!(
+            j_one,
+            j_two,
+            "Job: {:?} should eq: {:?} Missing external id, same internal id",
+            j_one,
+            j_two
+        )
+    }
+
+    #[test]
+    fn neq_missing_external_id_equality() {
+        let j_one = Job::new_without_external_id(100u64, 5u64, "foo one");
+        let j_two = Job::new(200u64, 1030u64, 6u64, "foo two");
+        assert_ne!(
+            j_one,
+            j_two,
+            "Job: {:?} should neq: {:?} Same internal id, missing external id, diff trigger_at",
             j_one,
             j_two
         )
