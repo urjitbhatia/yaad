@@ -1,6 +1,6 @@
-use std::time::{SystemTime, Duration};
-use std::ops::Add;
+use std::time::SystemTime;
 use std::cmp::Ordering;
+use times;
 
 /*
 The "Job" type - max possible values: u64::max_value() = 18446744073709551615.
@@ -10,40 +10,45 @@ internal_id will overflow after max value - internal functioning should not be a
 pub struct Job {
     pub internal_id: u64,
     external_id: u64,
-    trigger_at: SystemTime,
+    trigger_at_ms: u64,
     body: String,
 }
 
 impl Job {
     pub fn new(internal_id: u64, external_id: u64, trigger_at_ms: u64, body: &str) -> Job {
-        let trigger_at = SystemTime::now().add(Duration::from_millis(trigger_at_ms));
         let body = body.to_owned();
         Job {
             internal_id,
             external_id,
-            trigger_at,
+            trigger_at_ms,
             body,
         }
     }
 
     pub fn new_without_external_id(internal_id: u64, trigger_at_ms: u64, body: &str) -> Job {
-        let trigger_at = SystemTime::now().add(Duration::from_millis(trigger_at_ms));
         let body = body.to_owned();
         let external_id = 0u64;
         Job {
             internal_id,
             external_id,
-            trigger_at,
+            trigger_at_ms,
             body,
         }
     }
 
     #[inline]
-    pub fn trigger_at(&self) -> SystemTime { self.trigger_at }
+    pub fn trigger_at(&self) -> SystemTime {
+        times::ms_to_system_time(self.trigger_at_ms)
+    }
+
+    #[inline]
+    pub fn trigger_at_ms(&self) -> u64 {
+        self.trigger_at_ms
+    }
 
     #[inline]
     pub fn is_ready(&self) -> bool {
-        self.trigger_at <= SystemTime::now()
+        self.trigger_at_ms <= times::current_time_ms()
     }
 }
 
@@ -52,7 +57,7 @@ impl Ord for Job {
     fn cmp(&self, other: &Job) -> Ordering {
         // Flip ordering - we want min heap
         // Close trigger time means job > further trigger_at time.
-        self.trigger_at.cmp(&other.trigger_at).reverse()
+        self.trigger_at_ms.cmp(&other.trigger_at_ms).reverse()
     }
 }
 
@@ -154,17 +159,28 @@ mod tests {
     fn job_ordering_test() {
         let one = Job::new(1, 1, 1, "one");
         let two = Job::new(2, 2, 2, "two");
-        assert!(one > two, "A job with trigger time close to in the future is smaller in ordering");
+        assert!(
+            one > two,
+            "A job with trigger time close to in the future is smaller in ordering"
+        );
 
         let one = Job::new(1, 1, 2, "one");
         let two = Job::new(2, 2, 1, "two");
-        assert!(one < two, "A job with trigger time close to in the future is greater in ordering");
+        assert!(
+            one < two,
+            "A job with trigger time close to in the future is greater in ordering"
+        );
 
         let one = Job::new(1, 1, 2, "one");
         let two = Job::new(2, 2, 2, "two");
-        assert_eq!(one.cmp(&two), Ordering::Equal,
-                   "When two jobs have same trigger_at time, ordering comparison is Equal");
-        assert!(one.ne(&two),
-                   "When two jobs have same trigger_at time, equality comparison is not affected");
+        assert_eq!(
+            one.cmp(&two),
+            Ordering::Equal,
+            "When two jobs have same trigger_at time, ordering comparison is Equal"
+        );
+        assert!(
+            one.ne(&two),
+            "When two jobs have same trigger_at time, equality comparison is not affected"
+        );
     }
 }

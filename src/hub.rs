@@ -1,10 +1,20 @@
 use std::collections::BinaryHeap;
 use std::collections::binary_heap::PeekMut;
 
+use times;
 use spoke::Spoke;
+use job::Job;
+
+const DEFAULT_SPOKE_DURATION_MS: u64 = 10;
 
 pub struct Hub {
     spokes: BinaryHeap<Spoke>,
+}
+
+#[derive(Debug)]
+pub struct BoundingSpokeTime {
+    start_ms: u64,
+    end_ms: u64,
 }
 
 impl Hub {
@@ -12,6 +22,7 @@ impl Hub {
         Hub { spokes: BinaryHeap::new() }
     }
 
+    #[allow(dead_code)]
     fn add_spoke(&mut self, spoke: Spoke) {
         self.spokes.push(spoke);
     }
@@ -27,14 +38,26 @@ impl Hub {
         }
         ready_spokes
     }
+
+    #[allow(unused_variables)]
+    pub fn add_job(&mut self, job: Job) {
+        unimplemented!()
+    }
+
+    pub fn job_bounding_spoke_time(job: &Job) -> BoundingSpokeTime {
+        let spoke_start = times::floor_ms_from_epoch(job.trigger_at_ms());
+        return BoundingSpokeTime {
+            start_ms: spoke_start,
+            end_ms: spoke_start + DEFAULT_SPOKE_DURATION_MS,
+        };
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Spoke, Hub};
-    use std::time::{Duration, SystemTime};
+    use super::{Spoke, Hub, Job, times};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use std::thread;
-    use std::ops::Add;
 
     #[test]
     fn can_create_hub() {
@@ -45,7 +68,7 @@ mod tests {
     #[test]
     fn can_add_spokes() {
         let mut h = Hub::new();
-        h.add_spoke(Spoke::new(SystemTime::now(), 10_000));
+        h.add_spoke(Spoke::new(times::current_time_ms(), 10_000));
         assert_eq!(h.spokes.len(), 1);
     }
 
@@ -64,21 +87,33 @@ mod tests {
         // | s1<---------10ms--------->s1+10 .......~10ms....... s2<--------50ms--------->s2+50
         // |---------------------------------------------------------------------------------->time
         let mut h = Hub::new();
-        let first_spoke_start = SystemTime::now();
+        let first_spoke_start = times::current_time_ms();
         h.add_spoke(Spoke::new(first_spoke_start, 10));
         let walk_one = h.walk();
-        assert_eq!(walk_one.len(), 1, "Should find a spoke that is ready to be walked");
+        assert_eq!(
+            walk_one.len(),
+            1,
+            "Should find a spoke that is ready to be walked"
+        );
 
-        let second_spoke_start = SystemTime::now().add(Duration::from_millis(10));
+        let second_spoke_start = times::current_time_ms() + 10;
         h.add_spoke(Spoke::new(second_spoke_start, 50));
         assert_eq!(h.spokes.len(), 1);
         let walk_two = h.walk();
-        assert_eq!(walk_two.len(), 0, "Hub should not return spokes that are still in the future");
+        assert_eq!(
+            walk_two.len(),
+            0,
+            "Hub should not return spokes that are still in the future"
+        );
 
         thread::park_timeout(Duration::from_millis(10));
         assert_eq!(h.spokes.len(), 1);
         let walk_three = h.walk();
-        assert_eq!(walk_three.len(), 1, "Hub should now return a spoke that's ready to go");
+        assert_eq!(
+            walk_three.len(),
+            1,
+            "Hub should now return a spoke that's ready to go"
+        );
     }
 
     #[test]
@@ -89,18 +124,43 @@ mod tests {
         // |---------------------------------------------------------------------------------->time
         let mut h = Hub::new();
 
-        let first_spoke_start = SystemTime::now();
+        let first_spoke_start = times::current_time_ms();
         h.add_spoke(Spoke::new(first_spoke_start, 5));
         assert_eq!(h.spokes.len(), 1, "Can add a spoke to a hub");
 
-        let second_spoke_start = first_spoke_start.add(Duration::from_millis(2 + 5));
+        let second_spoke_start = first_spoke_start + 5 + 2;
         h.add_spoke(Spoke::new(second_spoke_start, 10));
         assert_eq!(h.spokes.len(), 2, "Can add a spoke to a hub");
 
         thread::park_timeout(Duration::from_millis(10));
         assert_eq!(h.spokes.len(), 2);
         let walk_one = h.walk();
-        assert_eq!(walk_one.len(), 2, "Hub should now both spokes that are ready to go");
-        assert!(walk_one[0] > walk_one[1], "Hub returns spokes in order of closest to first");
+        assert_eq!(
+            walk_one.len(),
+            2,
+            "Hub should now both spokes that are ready to go"
+        );
+        assert!(
+            walk_one[0] > walk_one[1],
+            "Hub returns spokes in order of closest to first"
+        );
+    }
+
+    #[test]
+    fn test_job_bounding_spoke_times() {
+        let dur_from_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let ms_from_epoch = times::floor_ms_from_epoch(times::duration_to_ms(dur_from_epoch));
+
+        // ms from epoch down to closest 10 and then add 10ms
+        let ms_from_epoch = ms_from_epoch + 10;
+        let job_trigger_at_ms = ms_from_epoch + 7;
+        let j = Job::new(1, 1, job_trigger_at_ms, "foo");
+
+
+        // This job's bounds should be: ms_from_epoch -> ms_from_epoch + 10
+        let bst = self::Hub::job_bounding_spoke_time(&j);
+        assert!(bst.start_ms <= job_trigger_at_ms);
+        assert!(job_trigger_at_ms <= bst.end_ms);
+        assert_eq!(bst.end_ms - bst.start_ms, super::DEFAULT_SPOKE_DURATION_MS);
     }
 }
