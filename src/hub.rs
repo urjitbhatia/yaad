@@ -1,5 +1,6 @@
 use std::collections::BinaryHeap;
 use std::collections::binary_heap::PeekMut;
+use std::time::SystemTime;
 
 use times;
 use spoke::Spoke;
@@ -9,6 +10,7 @@ const DEFAULT_SPOKE_DURATION_MS: u64 = 10;
 
 pub struct Hub {
     spokes: BinaryHeap<Spoke>,
+    past_spoke: Spoke,
 }
 
 #[derive(Debug)]
@@ -18,8 +20,16 @@ pub struct BoundingSpokeTime {
 }
 
 impl Hub {
+    /// Creates a new Hub - a hub orchestrates spokes and jobs. Hub is also responsible for ensuring
+    /// that spokes are generated on the fly when a spokeless job is added to the hub.
+    ///
+    /// A Hub comes with a default `past` spoke which accepts any job whose trigger time is in the
+    /// past. The hub will always try to walk this spoke first.
     pub fn new() -> Hub {
-        Hub { spokes: BinaryHeap::new() }
+        Hub {
+            spokes: BinaryHeap::new(),
+            past_spoke: Spoke::new(0, <u64>::max_value()),
+        }
     }
 
     fn add_spoke(&mut self, spoke: Spoke) {
@@ -38,9 +48,16 @@ impl Hub {
         ready_spokes
     }
 
+    /// Add a new job to the Hub - the hub will find or create the right spoke for this job
     #[allow(unused_variables)]
     pub fn add_job(&mut self, job: Job) {
-        unimplemented!()
+        if job.trigger_at() <= SystemTime::now() {
+            // This job should be handed to the past spoke
+            match self.past_spoke.add_job(job) {
+                Some(j) => panic!("Past spoke should always accept a job"),
+                None => return,
+            }
+        }
     }
 
     /// Returns the span of a hypothetical Spoke that should own this job.
@@ -81,6 +98,22 @@ mod tests {
     }
 
     #[test]
+    fn can_add_job_to_past() {
+        let mut h = Hub::new();
+        h.add_job(Job::new(
+            1,
+            1,
+            times::current_time_ms() - 10_000,
+            "I am old",
+        ));
+        assert_eq!(
+            h.past_spoke.pending_job_len(),
+            1,
+            "Hub should put jobs triggering in the past into it's special, past spoke"
+        );
+    }
+
+    #[test]
     fn walk_hub_with_spokes() {
         // |
         // |     spoke1  walk1([s1,])            walk2([])         spoke2   walk3([s2,])
@@ -91,7 +124,11 @@ mod tests {
 
         // Create a spoke that starts now and add it to the hub
         h.add_spoke(Spoke::new(first_spoke_start, 10));
-        assert_eq!(h.spokes.len(), 1, "Should list ownership of the newly added spoke");
+        assert_eq!(
+            h.spokes.len(),
+            1,
+            "Should list ownership of the newly added spoke"
+        );
 
         let walk_one = h.walk();
         assert_eq!(
@@ -99,7 +136,11 @@ mod tests {
             1,
             "Should find a spoke that is ready to be walked"
         );
-        assert_eq!(h.spokes.len(), 0, "Should not own any spokes, it was already consumed");
+        assert_eq!(
+            h.spokes.len(),
+            0,
+            "Should not own any spokes, it was already consumed"
+        );
 
         // Create another spoke that starts 10ms after the first spoke's starting time
         let second_spoke_start = times::current_time_ms() + 10;
