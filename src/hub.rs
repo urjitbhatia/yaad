@@ -49,19 +49,39 @@ impl Hub {
     }
 
     /// Add a new job to the Hub - the hub will find or create the right spoke for this job
-    #[allow(unused_variables)]
     pub fn add_job(&mut self, job: Job) {
+        // If None, past spoke accepted the job, else find the right spoke for it
+        match self.maybe_add_job_to_past(job) {
+            Some(j) => {
+                if self.add_job_to_spokes(j).is_some() {
+                    panic!("Hub should always accept a job")
+                }
+            }
+            None => return,
+        };
+    }
+
+    fn add_job_to_spokes(&mut self, job: Job) -> Option<Job> {
+        unimplemented!()
+    }
+
+    /// Attempts to add a job to the past spoke if the job is in the past and returns None.
+    /// Otherwise, returns Some(job)
+    fn maybe_add_job_to_past(&mut self, job: Job) -> Option<Job> {
+        // If job is old, add to the past spoke
         if job.trigger_at() <= SystemTime::now() {
             // This job should be handed to the past spoke
             match self.past_spoke.add_job(job) {
-                Some(j) => panic!("Past spoke should always accept a job"),
-                None => return,
+                Some(_) => panic!("Past spoke should always accept a job"),
+                None => return None,
             }
         }
+        // else, hand it back
+        return Option::from(job);
     }
 
     /// Returns the span of a hypothetical Spoke that should own this job.
-    pub fn job_bounding_spoke_time(job: &Job) -> BoundingSpokeTime {
+    fn job_bounding_spoke_time(job: &Job) -> BoundingSpokeTime {
         let spoke_start = times::floor_ms_from_epoch(job.trigger_at_ms());
         return BoundingSpokeTime {
             start_ms: spoke_start,
