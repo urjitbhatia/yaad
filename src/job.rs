@@ -1,11 +1,19 @@
+//! Jobs are the building blocks of the system - these are the individual items
+//! that can be acted upon.
+//!
+//! Each Job has a `trigger` time - the time, in Milliseconds since EPOCH (UTC) when this
+//! job is due.
+//!
+//! Jobs implement the PartialEquality trait [`job::PartialEq`] which orders them by nearness of
+//! execution time: a job whose trigger time is closer in the future is `greater` than a job that
+//! is due later.
+
 use std::time::SystemTime;
 use std::cmp::Ordering;
 use times;
 
-/*
-The "Job" type - max possible values: u64::max_value() = 18446744073709551615.
-internal_id will overflow after max value - internal functioning should not be affected.
-*/
+///The "Job" type has max possible values: u64::max_value() = 18446744073709551615.
+///internal_id will overflow after max value - internal functioning should not be affected.
 #[derive(Debug)]
 pub struct Job {
     pub internal_id: u64,
@@ -15,6 +23,8 @@ pub struct Job {
 }
 
 impl Job {
+    /// Creates a new job given an internal id, external id, trigger time in ms and the body.
+    /// TODO: This does not handle id collisions properly yet.
     pub fn new(internal_id: u64, external_id: u64, trigger_at_ms: u64, body: &str) -> Job {
         let body = body.to_owned();
         Job {
@@ -25,6 +35,8 @@ impl Job {
         }
     }
 
+    /// Creates new job that doesn't need an external id. An external id will not be generated in
+    /// this case.
     pub fn new_without_external_id(internal_id: u64, trigger_at_ms: u64, body: &str) -> Job {
         let body = body.to_owned();
         let external_id = 0u64;
@@ -36,16 +48,19 @@ impl Job {
         }
     }
 
+    /// Returns the job's trigger time in the current locale.
     #[inline]
     pub fn trigger_at(&self) -> SystemTime {
         times::ms_to_system_time(self.trigger_at_ms)
     }
 
+    /// Returns the job's trigger time as milliseconds from UnixEpoch.
     #[inline]
     pub fn trigger_at_ms(&self) -> u64 {
         self.trigger_at_ms
     }
 
+    /// Returns true if the job should trigger right now.
     #[inline]
     pub fn is_ready(&self) -> bool {
         self.trigger_at_ms <= times::current_time_ms()
@@ -53,7 +68,7 @@ impl Job {
 }
 
 impl Ord for Job {
-    /// A Job is greater than another job if the job's trigger time is further out in the future
+    /// A Job is greater than another job if the job's trigger time will happen before the other's
     fn cmp(&self, other: &Job) -> Ordering {
         // Flip ordering - we want min heap
         // Close trigger time means job > further trigger_at time.
@@ -69,6 +84,7 @@ impl PartialOrd for Job {
     }
 }
 
+/// PartialEq for a Job type ignores the `external_id` if it isn't set on either job being compared
 impl PartialEq for Job {
     /// A job's equality depends on the equality of either internal or external id
     fn eq(&self, other: &Job) -> bool {
@@ -87,7 +103,7 @@ mod tests {
     #[test]
     fn can_create_job() {
         let j = Job::new(100u64, 150u64, 5u64, "Test Body");
-        assert_eq!(j.internal_id, 100u64);
+        assert_eq!(j.internal_id, 100u64, "Should be able to create a job");
     }
 
     #[test]
@@ -161,14 +177,14 @@ mod tests {
         let two = Job::new(2, 2, 2, "two");
         assert!(
             one > two,
-            "A job with trigger time close to in the future is smaller in ordering"
+            "A job with trigger time closer in the future is smaller in ordering"
         );
 
         let one = Job::new(1, 1, 2, "one");
         let two = Job::new(2, 2, 1, "two");
         assert!(
             one < two,
-            "A job with trigger time close to in the future is greater in ordering"
+            "A job with trigger time closer in the future is greater in ordering"
         );
 
         let one = Job::new(1, 1, 2, "one");

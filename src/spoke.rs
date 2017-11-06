@@ -1,3 +1,6 @@
+//! A Spoke is a list of jobs whose trigger times fall within the Spoke's duration of
+//! responsibility.
+
 use std::collections::BinaryHeap;
 use std::collections::binary_heap::PeekMut;
 use std::fmt;
@@ -20,26 +23,26 @@ pub struct Spoke {
 
 impl Spoke {
     /// Constructs a new Spoke - a time bound chain of jobs starting at the current time
-    ///# Example
-    ///Create a spoke that starts at 5 sec, 0 ns from now
+    /// # Example
+    /// Create a spoke that starts at 5 sec, 0 ns from now
     ///
-    ///```rust
-    ///use Spoke;
-    ///let s = Spoke::new(Duration::new(5, 0));
-    ///s.add_job(Job::new(1, 2, 3, "hi");
     ///```
-    fn new_fromnow(duration_ms: u64) -> Spoke {
+    /// use Spoke;
+    /// let s = Spoke::new_from_now(Duration::new(5, 0));
+    /// s.add_job(Job::new(1, 2, 3, "hi");
+    ///```
+    fn new_from_now(duration_ms: u64) -> Spoke {
         Spoke::new(times::current_time_ms(), duration_ms)
     }
 
     /// Constructs a new Spoke - a time bound chain of jobs starting at the current time
-    ///# Example
-    ///Create a spoke that starts at 5 sec, 0 ns from now
+    /// # Example
+    /// Create a spoke that starts at 5 sec, 0 ns from now
     ///
     ///```
-    ///use Spoke;
-    ///let s = Spoke::new(Duration::new(5, 0));
-    ///s.add_job(Job::new(1, 2, 3, "hi");
+    /// use Spoke;
+    /// let s = Spoke::new(Duration::new(5, 0));
+    /// s.add_job(Job::new(1, 2, 3, "hi");
     ///```
     pub fn new(start_time_ms: u64, duration_ms: u64) -> Spoke {
         let end_time_ms = start_time_ms + duration_ms;
@@ -52,10 +55,15 @@ impl Spoke {
         }
     }
 
-    /// Add a new job into the Spoke
+    /// Add a new job into the Spoke - the job is optionally returned if the Spoke is not the right
+    /// one to take the job's responsibility.
     ///
-    /// The spoke can reject a job if it doesn't lie in it's time bounds
+    /// A Spoke is `responsible` for a job if that job's trigger time lies in the Spoke's
+    /// time bounds
     pub fn add_job(&mut self, job: Job) -> Option<Job> {
+        if self.is_expired() {
+            return Option::from(job);
+        }
         if self.start_time_ms <= job.trigger_at_ms() && job.trigger_at_ms() < self.end_time_ms {
             // Only accept jobs that are this spoke's responsibility
             println!("Accepting job");
@@ -67,9 +75,24 @@ impl Spoke {
         }
     }
 
-    ///Walk returns an iterator that returns jobs in trigger order
+    /// Walk returns an iterator that returns jobs in trigger order
     ///
-    ///Call walk in a loop like an iterator on this spoke
+    /// Call walk in a loop like an iterator on this spoke
+    /// # Example
+    /// ```
+    ///
+    /// use Spoke;
+    /// use times;
+    ///
+    /// let c = times::current_time_ms();
+    /// let s = Spoke.new_from_now(Duration::from_millis(10_000, 0));
+    /// s.add_job(Job::new(1, 1, c + 2500, "hello world");
+    /// s.add_job(Job::new(2, 2, c + 5500, "hello world again");
+    /// let i = s.walk().iter()
+    /// for j in i {
+    ///   println!("Job: {:?}", j)
+    /// }
+    /// ```
     pub fn walk(&mut self) -> Vec<Job> {
         let mut ready_jobs: Vec<Job> = vec![];
 
@@ -84,17 +107,23 @@ impl Spoke {
         ready_jobs
     }
 
+    /// Returns the number of jobs pending in this spoke
     #[inline]
     pub fn pending_job_len(&self) -> usize {
         self.job_list.len()
     }
 
+    /// Returns true if this Spoke's start time is now or in the past
     #[inline]
     pub fn is_ready(&self) -> bool {
         let now = times::current_time_ms();
         self.start_time_ms <= now && now < self.end_time_ms
     }
 
+    /// Returns true if this Spoke's end time is in the past.
+    ///
+    /// If a job is in the `expired` state, it will not accept any new jobs. Jobs can only be taken
+    /// from an expired Spoke.
     #[inline]
     pub fn is_expired(&self) -> bool {
         let now = times::current_time_ms();
@@ -116,7 +145,7 @@ impl fmt::Display for Spoke {
 }
 
 impl Ord for Spoke {
-    /// A Spoke is greater than another spoke if it's start time is further out in the future
+    /// A Spoke is greater than another spoke if it's start time is nearer in the future
     /// and it's end time is strictly less than the other's start time.
     fn cmp(&self, other: &Spoke) -> Ordering {
         // Flip ordering
@@ -149,14 +178,14 @@ mod tests {
 
     #[test]
     fn can_create_spoke() {
-        let s: Spoke = Spoke::new_fromnow(10);
+        let s: Spoke = Spoke::new_from_now(10);
         assert_eq!(s.job_list.len(), 0)
     }
 
     #[test]
     fn can_add_jobs() {
         let current_ms = times::current_time_ms();
-        let mut s: Spoke = Spoke::new_fromnow(10_000);
+        let mut s: Spoke = Spoke::new_from_now(10_000);
         s.add_job(Job::new(2u64, 2u64, current_ms + 4000, "Hello Second Job!"));
         assert_eq!(s.job_list.len(), 1);
         s.add_job(Job::new(1u64, 1u64, current_ms + 6000, "Hello Second Job!"));
@@ -165,7 +194,7 @@ mod tests {
 
     #[test]
     fn walk_empty_spoke() {
-        let mut s: Spoke = Spoke::new_fromnow(1000);
+        let mut s: Spoke = Spoke::new_from_now(1000);
         let res = s.walk();
         assert_eq!(res.len(), 0, "Empty spoke should have no jobs")
     }
@@ -247,9 +276,9 @@ mod tests {
 
     #[test]
     fn spoke_ordering() {
-        let one = Spoke::new_fromnow(5);
+        let one = Spoke::new_from_now(5);
         thread::park_timeout(Duration::from_millis(10));
-        let two = Spoke::new_fromnow(5);
+        let two = Spoke::new_from_now(5);
         assert!(
             one > two,
             "Spoke with time interval closer to now should be greater"

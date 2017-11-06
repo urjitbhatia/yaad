@@ -22,7 +22,6 @@ impl Hub {
         Hub { spokes: BinaryHeap::new() }
     }
 
-    #[allow(dead_code)]
     fn add_spoke(&mut self, spoke: Spoke) {
         self.spokes.push(spoke);
     }
@@ -44,6 +43,7 @@ impl Hub {
         unimplemented!()
     }
 
+    /// Returns the span of a hypothetical Spoke that should own this job.
     pub fn job_bounding_spoke_time(job: &Job) -> BoundingSpokeTime {
         let spoke_start = times::floor_ms_from_epoch(job.trigger_at_ms());
         return BoundingSpokeTime {
@@ -88,17 +88,24 @@ mod tests {
         // |---------------------------------------------------------------------------------->time
         let mut h = Hub::new();
         let first_spoke_start = times::current_time_ms();
+
+        // Create a spoke that starts now and add it to the hub
         h.add_spoke(Spoke::new(first_spoke_start, 10));
+        assert_eq!(h.spokes.len(), 1, "Should list ownership of the newly added spoke");
+
         let walk_one = h.walk();
         assert_eq!(
             walk_one.len(),
             1,
             "Should find a spoke that is ready to be walked"
         );
+        assert_eq!(h.spokes.len(), 0, "Should not own any spokes, it was already consumed");
 
+        // Create another spoke that starts 10ms after the first spoke's starting time
         let second_spoke_start = times::current_time_ms() + 10;
         h.add_spoke(Spoke::new(second_spoke_start, 50));
         assert_eq!(h.spokes.len(), 1);
+
         let walk_two = h.walk();
         assert_eq!(
             walk_two.len(),
@@ -146,16 +153,19 @@ mod tests {
         );
     }
 
+    /// This test checks that we can calculate if a Spoke should own a job - a spoke should own a
+    /// job if that job's trigger time lies within the Spoke's duration.
     #[test]
     fn test_job_bounding_spoke_times() {
+        // Find Duration since UNIX_EPOCH
         let dur_from_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        // Find the ms since EPOCH, floored to the nearest decimal
         let ms_from_epoch = times::floor_ms_from_epoch(times::duration_to_ms(dur_from_epoch));
 
         // ms from epoch down to closest 10 and then add 10ms
         let ms_from_epoch = ms_from_epoch + 10;
         let job_trigger_at_ms = ms_from_epoch + 7;
         let j = Job::new(1, 1, job_trigger_at_ms, "foo");
-
 
         // This job's bounds should be: ms_from_epoch -> ms_from_epoch + 10
         let bst = self::Hub::job_bounding_spoke_time(&j);
