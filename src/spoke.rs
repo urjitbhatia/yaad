@@ -16,9 +16,36 @@ use job::Job;
 /// Any job that should trigger in this time bound should be handled
 /// by this spoke.
 pub struct Spoke {
+    bst: BoundingSpokeTime,
+    job_list: BinaryHeap<Job>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct BoundingSpokeTime {
     start_time_ms: u64,
     end_time_ms: u64,
-    job_list: BinaryHeap<Job>,
+}
+
+impl BoundingSpokeTime {
+    pub fn new(start_time_ms: u64, end_time_ms: u64) -> BoundingSpokeTime {
+        BoundingSpokeTime {
+            start_time_ms,
+            end_time_ms,
+        }
+    }
+
+    #[inline]
+    pub fn get_start_time_ms(&self) -> u64 {
+        self.start_time_ms
+    }
+    #[inline]
+    pub fn get_end_time_ms(&self) -> u64 {
+        self.end_time_ms
+    }
+
+    pub fn contains(&self, other: &BoundingSpokeTime) -> bool {
+        self.start_time_ms <= other.start_time_ms && self.end_time_ms > other.end_time_ms
+    }
 }
 
 impl Spoke {
@@ -35,6 +62,10 @@ impl Spoke {
         Spoke::new(times::current_time_ms(), duration_ms)
     }
 
+    pub fn new_from_bounds(bst: BoundingSpokeTime) -> Spoke {
+        let job_list = BinaryHeap::new();
+        Spoke { bst, job_list }
+    }
     /// Constructs a new Spoke - a time bound chain of jobs starting at the current time
     /// # Example
     /// Create a spoke that starts at 5 sec, 0 ns from now
@@ -47,12 +78,11 @@ impl Spoke {
     pub fn new(start_time_ms: u64, duration_ms: u64) -> Spoke {
         let end_time_ms = start_time_ms + duration_ms;
         let job_list = BinaryHeap::new();
-
-        Spoke {
+        let bst = BoundingSpokeTime {
             start_time_ms,
             end_time_ms,
-            job_list,
-        }
+        };
+        Spoke { bst, job_list }
     }
 
     /// Add a new job into the Spoke - the job is optionally returned if the Spoke is not the right
@@ -64,7 +94,9 @@ impl Spoke {
         if self.is_expired() {
             return Option::from(job);
         }
-        if self.start_time_ms <= job.trigger_at_ms() && job.trigger_at_ms() < self.end_time_ms {
+        if self.bst.start_time_ms <= job.trigger_at_ms() &&
+            job.trigger_at_ms() < self.bst.end_time_ms
+        {
             // Only accept jobs that are this spoke's responsibility
             println!("Accepting job");
             self.job_list.push(job);
@@ -117,7 +149,12 @@ impl Spoke {
     #[inline]
     pub fn is_ready(&self) -> bool {
         let now = times::current_time_ms();
-        self.start_time_ms <= now && now < self.end_time_ms
+        self.bst.start_time_ms <= now && now < self.bst.end_time_ms
+    }
+
+    #[inline]
+    pub fn get_bounds(&self) -> BoundingSpokeTime {
+        self.bst
     }
 
     /// Returns true if this Spoke's end time is in the past.
@@ -127,7 +164,7 @@ impl Spoke {
     #[inline]
     pub fn is_expired(&self) -> bool {
         let now = times::current_time_ms();
-        self.end_time_ms < now
+        self.bst.end_time_ms < now
     }
 }
 
@@ -136,8 +173,8 @@ impl fmt::Display for Spoke {
         write!(
             f,
             "(Start time: {:?}, Duration: {:?} sec, NumJobs: {}, JobList: {:?})",
-            self.start_time_ms,
-            self.end_time_ms,
+            self.bst.start_time_ms,
+            self.bst.end_time_ms,
             self.job_list.len(),
             self.job_list
         )
@@ -149,9 +186,10 @@ impl Ord for Spoke {
     /// and it's end time is strictly less than the other's start time.
     fn cmp(&self, other: &Spoke) -> Ordering {
         // Flip ordering
-        self.start_time_ms
-            .cmp(&other.start_time_ms)
-            .then(self.end_time_ms.cmp(&other.end_time_ms))
+        self.bst
+            .start_time_ms
+            .cmp(&other.bst.start_time_ms)
+            .then(self.bst.end_time_ms.cmp(&other.bst.end_time_ms))
             .reverse()
     }
 }
@@ -166,7 +204,8 @@ impl PartialOrd for Spoke {
 
 impl PartialEq for Spoke {
     fn eq(&self, other: &Spoke) -> bool {
-        self.start_time_ms.eq(&other.start_time_ms) && self.end_time_ms.eq(&other.end_time_ms)
+        self.bst.start_time_ms.eq(&other.bst.start_time_ms) &&
+            self.bst.end_time_ms.eq(&other.bst.end_time_ms)
     }
 }
 

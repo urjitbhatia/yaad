@@ -3,7 +3,7 @@ use std::collections::binary_heap::PeekMut;
 use std::time::SystemTime;
 
 use times;
-use spoke::Spoke;
+use spoke::{Spoke, BoundingSpokeTime};
 use job::Job;
 
 const DEFAULT_SPOKE_DURATION_MS: u64 = 10;
@@ -11,12 +11,6 @@ const DEFAULT_SPOKE_DURATION_MS: u64 = 10;
 pub struct Hub {
     spokes: BinaryHeap<Spoke>,
     past_spoke: Spoke,
-}
-
-#[derive(Debug)]
-pub struct BoundingSpokeTime {
-    start_ms: u64,
-    end_ms: u64,
 }
 
 impl Hub {
@@ -61,8 +55,34 @@ impl Hub {
         };
     }
 
+    /// Adds a job to the correct spoke based on the Job's trigger time
     fn add_job_to_spokes(&mut self, job: Job) -> Option<Job> {
         unimplemented!()
+        //        let job_bst = Hub::job_bounding_spoke_time(&job);
+        // TODO : WTF!!!!!
+        //        let next_spoke = self.spokes
+        //            .into_sorted_vec()
+        //            .skip_while(|s| {
+        //                s.get_bounds().get_end_time_ms() < job_bst.get_start_time_ms()
+        //            })
+        //            .next();
+        //
+        //        match next_spoke {
+        //            Some(s) => {
+        //                let j = s.add_job(job);
+        //                match j {
+        //                    Some(j) => {
+        //                        // create new spoke?
+        //                        self.add_spoke(Spoke::new_from_bounds(job_bst))
+        //                    }
+        //                    _ => (), // s took the job
+        //                }
+        //            }
+        //            None => {
+        //                // create new spoke
+        //                self.add_spoke(Spoke::new_from_bounds(job_bst))
+        //            }
+        //        }
     }
 
     /// Attempts to add a job to the past spoke if the job is in the past and returns None.
@@ -83,10 +103,7 @@ impl Hub {
     /// Returns the span of a hypothetical Spoke that should own this job.
     fn job_bounding_spoke_time(job: &Job) -> BoundingSpokeTime {
         let spoke_start = times::floor_ms_from_epoch(job.trigger_at_ms());
-        return BoundingSpokeTime {
-            start_ms: spoke_start,
-            end_ms: spoke_start + DEFAULT_SPOKE_DURATION_MS,
-        };
+        return BoundingSpokeTime::new(spoke_start, spoke_start + DEFAULT_SPOKE_DURATION_MS);
     }
 }
 
@@ -230,8 +247,11 @@ mod tests {
 
         // This job's bounds should be: ms_from_epoch -> ms_from_epoch + 10
         let bst = self::Hub::job_bounding_spoke_time(&j);
-        assert!(bst.start_ms <= job_trigger_at_ms);
-        assert!(job_trigger_at_ms <= bst.end_ms);
-        assert_eq!(bst.end_ms - bst.start_ms, super::DEFAULT_SPOKE_DURATION_MS);
+        assert!(bst.get_start_time_ms() <= job_trigger_at_ms);
+        assert!(job_trigger_at_ms <= bst.get_end_time_ms());
+        assert_eq!(
+            bst.get_end_time_ms() - bst.get_start_time_ms(),
+            super::DEFAULT_SPOKE_DURATION_MS
+        );
     }
 }
