@@ -1,4 +1,4 @@
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::collections::binary_heap::PeekMut;
 use std::time::SystemTime;
 
@@ -9,7 +9,8 @@ use job::Job;
 const DEFAULT_SPOKE_DURATION_MS: u64 = 10;
 
 pub struct Hub {
-    spokes: BinaryHeap<Spoke>,
+    bst_heap: BinaryHeap<BoundingSpokeTime>,
+    bst_spoke_map: HashMap<BoundingSpokeTime, Spoke>,
     past_spoke: Spoke,
 }
 
@@ -21,20 +22,27 @@ impl Hub {
     /// past. The hub will always try to walk this spoke first.
     pub fn new() -> Hub {
         Hub {
-            spokes: BinaryHeap::new(),
+            bst_heap: BinaryHeap::new(),
+            bst_spoke_map: HashMap::new(),
             past_spoke: Spoke::new(0, <u64>::max_value()),
         }
     }
 
     fn add_spoke(&mut self, spoke: Spoke) {
-        self.spokes.push(spoke);
+        // TODO: Make these two operations atomic?
+        self.bst_heap.push(spoke.get_bounds());
+        self.bst_spoke_map.insert(spoke.get_bounds(), spoke);
     }
 
     pub fn walk(&mut self) -> Vec<Spoke> {
         let mut ready_spokes: Vec<Spoke> = vec![];
-        while let Some(peeked) = self.spokes.peek_mut() {
+
+        while let Some(peeked) = self.bst_heap.peek_mut() {
             if peeked.is_ready() || peeked.is_expired() {
-                ready_spokes.push(PeekMut::pop(peeked));
+                match self.bst_spoke_map.remove(&PeekMut::pop(peeked)) {
+                    Some(s) => ready_spokes.push(s),
+                    _ => (),
+                };
             } else {
                 break;
             }
@@ -116,21 +124,24 @@ mod tests {
     #[test]
     fn can_create_hub() {
         let h: Hub = Hub::new();
-        assert_eq!(h.spokes.len(), 0)
+        assert_eq!(h.bst_heap.len(), 0);
+        assert_eq!(h.bst_spoke_map.len(), 0)
     }
 
     #[test]
     fn can_add_spokes() {
         let mut h = Hub::new();
         h.add_spoke(Spoke::new(times::current_time_ms(), 10_000));
-        assert_eq!(h.spokes.len(), 1);
+        assert_eq!(h.bst_heap.len(), 1);
+        assert_eq!(h.bst_spoke_map.len(), 1)
     }
 
     #[test]
     fn walk_empty_hub() {
         let mut h = Hub::new();
         let res = h.walk();
-        assert_eq!(h.spokes.len(), 0);
+        assert_eq!(h.bst_heap.len(), 0);
+        assert_eq!(h.bst_spoke_map.len(), 0);
         assert_eq!(res.len(), 0, "Empty hub walk should return no spokes")
     }
 
@@ -162,7 +173,12 @@ mod tests {
         // Create a spoke that starts now and add it to the hub
         h.add_spoke(Spoke::new(first_spoke_start, 10));
         assert_eq!(
-            h.spokes.len(),
+            h.bst_heap.len(),
+            1,
+            "Should list ownership of the newly added spoke"
+        );
+        assert_eq!(
+            h.bst_spoke_map.len(),
             1,
             "Should list ownership of the newly added spoke"
         );
@@ -174,7 +190,12 @@ mod tests {
             "Should find a spoke that is ready to be walked"
         );
         assert_eq!(
-            h.spokes.len(),
+            h.bst_spoke_map.len(),
+            0,
+            "Should not own any spokes, it was already consumed"
+        );
+        assert_eq!(
+            h.bst_heap.len(),
             0,
             "Should not own any spokes, it was already consumed"
         );
@@ -182,7 +203,8 @@ mod tests {
         // Create another spoke that starts 10ms after the first spoke's starting time
         let second_spoke_start = times::current_time_ms() + 10;
         h.add_spoke(Spoke::new(second_spoke_start, 50));
-        assert_eq!(h.spokes.len(), 1);
+        assert_eq!(h.bst_heap.len(), 1);
+        assert_eq!(h.bst_spoke_map.len(), 1);
 
         let walk_two = h.walk();
         assert_eq!(
@@ -192,7 +214,8 @@ mod tests {
         );
 
         thread::park_timeout(Duration::from_millis(10));
-        assert_eq!(h.spokes.len(), 1);
+        assert_eq!(h.bst_spoke_map.len(), 1);
+        assert_eq!(h.bst_heap.len(), 1);
         let walk_three = h.walk();
         assert_eq!(
             walk_three.len(),
@@ -211,14 +234,17 @@ mod tests {
 
         let first_spoke_start = times::current_time_ms();
         h.add_spoke(Spoke::new(first_spoke_start, 5));
-        assert_eq!(h.spokes.len(), 1, "Can add a spoke to a hub");
+        assert_eq!(h.bst_spoke_map.len(), 1, "Can add a spoke to a hub");
+        assert_eq!(h.bst_heap.len(), 1, "Can add a spoke to a hub");
 
         let second_spoke_start = first_spoke_start + 5 + 2;
         h.add_spoke(Spoke::new(second_spoke_start, 10));
-        assert_eq!(h.spokes.len(), 2, "Can add a spoke to a hub");
+        assert_eq!(h.bst_spoke_map.len(), 2, "Can add a spoke to a hub");
+        assert_eq!(h.bst_heap.len(), 2, "Can add a spoke to a hub");
 
         thread::park_timeout(Duration::from_millis(10));
-        assert_eq!(h.spokes.len(), 2);
+        assert_eq!(h.bst_spoke_map.len(), 2);
+        assert_eq!(h.bst_heap.len(), 2);
         let walk_one = h.walk();
         assert_eq!(
             walk_one.len(),

@@ -20,7 +20,7 @@ pub struct Spoke {
     job_list: BinaryHeap<Job>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, Hash)]
 pub struct BoundingSpokeTime {
     start_time_ms: u64,
     end_time_ms: u64,
@@ -45,6 +45,18 @@ impl BoundingSpokeTime {
 
     pub fn contains(&self, other: &BoundingSpokeTime) -> bool {
         self.start_time_ms <= other.start_time_ms && self.end_time_ms > other.end_time_ms
+    }
+
+    #[inline]
+    pub fn is_ready(&self) -> bool {
+        let now = times::current_time_ms();
+        self.start_time_ms <= now && now < self.end_time_ms
+    }
+
+    #[inline]
+    pub fn is_expired(&self) -> bool {
+        let now = times::current_time_ms();
+        self.end_time_ms < now
     }
 }
 
@@ -148,8 +160,7 @@ impl Spoke {
     /// Returns true if this Spoke's start time is now or in the past
     #[inline]
     pub fn is_ready(&self) -> bool {
-        let now = times::current_time_ms();
-        self.bst.start_time_ms <= now && now < self.bst.end_time_ms
+        self.bst.is_ready()
     }
 
     #[inline]
@@ -163,8 +174,7 @@ impl Spoke {
     /// from an expired Spoke.
     #[inline]
     pub fn is_expired(&self) -> bool {
-        let now = times::current_time_ms();
-        self.bst.end_time_ms < now
+        self.bst.is_expired()
     }
 }
 
@@ -206,6 +216,30 @@ impl PartialEq for Spoke {
     fn eq(&self, other: &Spoke) -> bool {
         self.bst.start_time_ms.eq(&other.bst.start_time_ms) &&
             self.bst.end_time_ms.eq(&other.bst.end_time_ms)
+    }
+}
+
+impl Ord for BoundingSpokeTime {
+    /// A BoundingSpokeTime is greater than another spoke if it's start time is nearer in the future
+    /// and it's end time is strictly less than the other's start time.
+    fn cmp(&self, other: &BoundingSpokeTime) -> Ordering {
+        // Flip ordering
+        self.start_time_ms
+            .cmp(&other.start_time_ms)
+            .then(self.end_time_ms.cmp(&other.end_time_ms))
+            .reverse()
+    }
+}
+
+impl PartialOrd for BoundingSpokeTime {
+    fn partial_cmp(&self, other: &BoundingSpokeTime) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for BoundingSpokeTime {
+    fn eq(&self, other: &BoundingSpokeTime) -> bool {
+        self.start_time_ms.eq(&other.start_time_ms) && self.end_time_ms.eq(&other.end_time_ms)
     }
 }
 
