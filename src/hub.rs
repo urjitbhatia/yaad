@@ -5,10 +5,9 @@ use times;
 use spoke::{Spoke, BoundingSpokeTime};
 use job::Job;
 
-const DEFAULT_SPOKE_DURATION_MS: u64 = 10;
-
 #[derive(Debug)]
 pub struct Hub {
+    spoke_duration_ms: u64,
     bst_heap: BinaryHeap<BoundingSpokeTime>,
     bst_spoke_map: BTreeMap<BoundingSpokeTime, Spoke>,
     past_spoke: Spoke,
@@ -20,8 +19,9 @@ impl Hub {
     ///
     /// A Hub comes with a default `past` spoke which accepts any job whose trigger time is in the
     /// past. The hub will always try to walk this spoke first.
-    pub fn new() -> Hub {
+    pub fn new(spoke_duration_ms: u64) -> Hub {
         Hub {
+            spoke_duration_ms,
             bst_heap: BinaryHeap::new(),
             bst_spoke_map: BTreeMap::new(),
             past_spoke: Spoke::new(0, <u64>::max_value()),
@@ -56,7 +56,7 @@ impl Hub {
     /// Add a new job to the Hub - the hub will find or create the right spoke for this job
     pub fn add_job(&mut self, job: Job) {
         // If None, past spoke accepted the job, else find the right spoke for it
-        println!("\nAdding job to hub. Job trigger: {}", job.trigger_at_ms());
+        println!("Adding job to hub. Job trigger: {}", job.trigger_at_ms());
         match self.maybe_add_job_to_past(job) {
             Some(j) => {
                 if self.add_job_to_spokes(j).is_some() {
@@ -69,7 +69,7 @@ impl Hub {
 
     /// Adds a job to the correct spoke based on the Job's trigger time
     fn add_job_to_spokes(&mut self, job: Job) -> Option<Job> {
-        let job_bst = Hub::job_bounding_spoke_time(&job);
+        let job_bst = Hub::job_bounding_spoke_time(&job, self.spoke_duration_ms);
         match {
             // Try to skip as many bounds as possible : these bounds are before this job's bound
             let next_spoke = self.bst_spoke_map
@@ -79,7 +79,6 @@ impl Hub {
             // This next spoke is a candidate that might accept this job
             match next_spoke {
                 Some(s) => {
-                    println!("\nFound potential next spoke");
                     // If spoke exists, try to give it the job
                     match s.1.add_job(job) {
                         // Spoke rejected the job and returned it to us, return to top level match
@@ -107,9 +106,14 @@ impl Hub {
     /// Otherwise, returns Some(job)
     fn maybe_add_job_to_past(&mut self, job: Job) -> Option<Job> {
         // If job is old, add to the past spoke
-        if job.trigger_at_ms() <= times::current_time_ms() {
+        let current_time_ms = times::current_time_ms();
+        if job.trigger_at_ms() <= current_time_ms {
             // This job should be handed to the past spoke
-            println!("This job is older then current time");
+            println!(
+                "This job: {} is older then current time: {}",
+                job.trigger_at_ms(),
+                current_time_ms
+            );
             match self.past_spoke.add_job(job) {
                 Some(_) => panic!("Past spoke should always accept a job"),
                 None => return None,
@@ -120,28 +124,29 @@ impl Hub {
     }
 
     /// Returns the span of a hypothetical Spoke that should own this job.
-    fn job_bounding_spoke_time(job: &Job) -> BoundingSpokeTime {
+    fn job_bounding_spoke_time(job: &Job, spoke_duration_ms: u64) -> BoundingSpokeTime {
         let spoke_start = times::floor_ms_from_epoch(job.trigger_at_ms());
-        return BoundingSpokeTime::new(spoke_start, spoke_start + DEFAULT_SPOKE_DURATION_MS);
+        return BoundingSpokeTime::new(spoke_start, spoke_start + spoke_duration_ms);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    const TEST_SPOKE_DURATION_MS: u64 = 10;
     use super::{Spoke, Hub, Job, times};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use std::thread;
 
     #[test]
     fn can_create_hub() {
-        let h: Hub = Hub::new();
+        let h: Hub = Hub::new(TEST_SPOKE_DURATION_MS);
         assert_eq!(h.bst_heap.len(), 0);
         assert_eq!(h.bst_spoke_map.len(), 0)
     }
 
     #[test]
     fn can_add_spokes() {
-        let mut h = Hub::new();
+        let mut h = Hub::new(TEST_SPOKE_DURATION_MS);
         h.add_spoke(Spoke::new(times::current_time_ms(), 10_000));
         assert_eq!(h.bst_heap.len(), 1);
         assert_eq!(h.bst_spoke_map.len(), 1)
@@ -149,7 +154,7 @@ mod tests {
 
     #[test]
     fn walk_empty_hub() {
-        let mut h = Hub::new();
+        let mut h = Hub::new(TEST_SPOKE_DURATION_MS);
         let res = h.walk();
         assert_eq!(h.bst_heap.len(), 0);
         assert_eq!(h.bst_spoke_map.len(), 0);
@@ -158,7 +163,7 @@ mod tests {
 
     #[test]
     fn can_add_job_to_past() {
-        let mut h = Hub::new();
+        let mut h = Hub::new(TEST_SPOKE_DURATION_MS);
         h.add_job(Job::new(
             1,
             1,
@@ -178,7 +183,7 @@ mod tests {
         // |     spoke1  walk1([s1,])            walk2([])         spoke2   walk3([s2,])
         // | s1<---------10ms--------->s1+10 .......~10ms....... s2<--------50ms--------->s2+50
         // |---------------------------------------------------------------------------------->time
-        let mut h = Hub::new();
+        let mut h = Hub::new(TEST_SPOKE_DURATION_MS);
         let first_spoke_start = times::current_time_ms();
 
         // Create a spoke that starts now and add it to the hub
@@ -241,7 +246,7 @@ mod tests {
         // |     spoke1                           spoke2         walk1([s2,])
         // | s1<---------5ms--------->s1+5 .2ms. s2(s1+7)<--------5ms--------->s2+50
         // |---------------------------------------------------------------------------------->time
-        let mut h = Hub::new();
+        let mut h = Hub::new(TEST_SPOKE_DURATION_MS);
 
         let first_spoke_start = times::current_time_ms();
         h.add_spoke(Spoke::new(first_spoke_start, 5));
@@ -283,31 +288,31 @@ mod tests {
         let j = Job::new(1, 1, job_trigger_at_ms, "foo");
 
         // This job's bounds should be: ms_from_epoch -> ms_from_epoch + 10
-        let bst = self::Hub::job_bounding_spoke_time(&j);
+        let bst = self::Hub::job_bounding_spoke_time(&j, TEST_SPOKE_DURATION_MS);
         assert!(bst.get_start_time_ms() <= job_trigger_at_ms);
         assert!(job_trigger_at_ms <= bst.get_end_time_ms());
         assert_eq!(
             bst.get_end_time_ms() - bst.get_start_time_ms(),
-            super::DEFAULT_SPOKE_DURATION_MS
+            super::TEST_SPOKE_DURATION_MS
         );
     }
 
     #[test]
     fn add_job_to_hub() {
         let start_time_ms = times::current_time_ms();
-        let mut hub = Hub::new();
+        let mut hub = Hub::new(TEST_SPOKE_DURATION_MS);
         hub.add_job(Job::new(1, 1, start_time_ms + 2, "one spoke"));
         hub.add_job(Job::new(3, 3, start_time_ms + 3, "one spoke"));
         hub.add_job(Job::new(
             2,
             2,
-            start_time_ms + super::DEFAULT_SPOKE_DURATION_MS * 2 + 4,
+            start_time_ms + super::TEST_SPOKE_DURATION_MS * 2 + 4,
             "foo",
         ));
         hub.add_job(Job::new(
             4,
             4,
-            start_time_ms + super::DEFAULT_SPOKE_DURATION_MS * 2 + 5,
+            start_time_ms + super::TEST_SPOKE_DURATION_MS * 2 + 5,
             "foo",
         ));
         assert_eq!(hub.bst_spoke_map.len(), 2);

@@ -112,7 +112,6 @@ impl Spoke {
             job.trigger_at_ms() < self.bst.end_time_ms
         {
             // Only accept jobs that are this spoke's responsibility
-            println!("Accepting job");
             self.job_list.push(job);
             return Option::None;
         } else {

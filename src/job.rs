@@ -58,6 +58,11 @@ impl Job {
     pub fn is_ready(&self) -> bool {
         self.trigger_at_ms <= times::current_time_ms()
     }
+
+    #[inline]
+    pub fn get_body(&self) -> String {
+        self.body.clone()
+    }
 }
 
 impl Ord for Job {

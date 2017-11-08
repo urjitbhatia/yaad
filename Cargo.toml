@@ -2,3 +2,6 @@
 name = "yaad"
 version = "0.1.0"
 authors = ["Urjit Singh Bhatia <urjitsb87@gmail.com>"]
+
+[dependencies]
+rand = "0.3"
