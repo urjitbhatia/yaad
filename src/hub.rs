@@ -128,7 +128,27 @@ impl Hub {
         let spoke_start = times::floor_ms_from_epoch(job.trigger_at_ms());
         return BoundingSpokeTime::new(spoke_start, spoke_start + spoke_duration_ms);
     }
+
+    /// Returns a vec of all jobs that are ready to be consumed
+    pub fn walk_jobs(&mut self) -> Vec<Job> {
+        let mut past_jobs: Vec<Job> = vec![];
+
+        for j in self.past_spoke.walk() {
+            past_jobs.push(j)
+        }
+
+        for mut s in self.walk() {
+            for j in s.walk() {
+                past_jobs.push(j)
+            }
+            if s.pending_job_len() > 0 {
+                self.add_spoke(s);
+            }
+        }
+        past_jobs
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -294,7 +314,7 @@ mod tests {
         assert!(job_trigger_at_ms <= bst.get_end_time_ms());
         assert_eq!(
             bst.get_end_time_ms() - bst.get_start_time_ms(),
-            super::TEST_SPOKE_DURATION_MS
+            TEST_SPOKE_DURATION_MS
         );
     }
 
@@ -307,13 +327,13 @@ mod tests {
         hub.add_job(Job::new(
             2,
             2,
-            start_time_ms + super::TEST_SPOKE_DURATION_MS * 2 + 4,
+            start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4,
             "foo",
         ));
         hub.add_job(Job::new(
             4,
             4,
-            start_time_ms + super::TEST_SPOKE_DURATION_MS * 2 + 5,
+            start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 5,
             "foo",
         ));
         assert_eq!(hub.bst_spoke_map.len(), 2);

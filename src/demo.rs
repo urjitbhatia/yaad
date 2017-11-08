@@ -36,14 +36,14 @@ pub fn demo() {
             );
             job_counter += 1;
             println!(
-                "\nAdding demo job: {} :: Trigger at {:?}",
+                "\nAdding demo job: {} :: Trigger at {:?} ms from now",
                 j.get_body(),
-                times::ms_to_system_time(j.trigger_at_ms())
+                j.trigger_at_ms() - times::current_time_ms()
             );
             h.add_job(j);
         }
 
-        if job_counter >= 10 {
+        if job_counter == 10 {
             // Switch into drain mode...
             println!(
                 "Added: {} jobs, switching to job drain mode at time: {}",
@@ -51,21 +51,17 @@ pub fn demo() {
                 times::current_time_ms()
             );
             while job_counter > 0 {
-                for mut s in h.walk() {
-                    while !s.is_expired() && s.pending_job_len() != 0 {
-                        for j in s.walk() {
-                            println!(
-                                "Ready job: {} to be triggered at: {} current time: {}",
-                                j.get_body(),
-                                j.trigger_at_ms(),
-                                times::current_time_ms()
-                            );
-                            job_counter -= 1;
-                        }
-
-                        thread::park_timeout(Duration::from_millis(100));
-                    }
-                }
+                h.walk_jobs().iter().for_each(|j| {
+                    println!(
+                        "Ready job: {} to be triggered at: {} current time: {}",
+                        j.get_body(),
+                        j.trigger_at_ms(),
+                        times::current_time_ms()
+                    );
+                    job_counter -= 1;
+                    println!("Remaining: {} jobs", job_counter);
+                    thread::park_timeout(Duration::from_millis(100));
+                });
             }
         }
 
