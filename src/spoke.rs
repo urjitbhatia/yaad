@@ -181,16 +181,37 @@ impl fmt::Display for Spoke {
     }
 }
 
+impl Ord for BoundingSpokeTime {
+    /// A BoundingSpokeTime is greater than another spoke if it's start time is nearer in the future
+    /// and it's end time is strictly less than the other's start time.
+    fn cmp(&self, other: &BoundingSpokeTime) -> Ordering {
+        // Flip ordering
+        self.start_time_ms
+            .cmp(&other.start_time_ms)
+            .then(self.end_time_ms.cmp(&other.end_time_ms))
+            .reverse()
+    }
+}
+
+impl Eq for BoundingSpokeTime {}
+
+impl PartialOrd for BoundingSpokeTime {
+    fn partial_cmp(&self, other: &BoundingSpokeTime) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for BoundingSpokeTime {
+    fn eq(&self, other: &BoundingSpokeTime) -> bool {
+        self.start_time_ms.eq(&other.start_time_ms) && self.end_time_ms.eq(&other.end_time_ms)
+    }
+}
+
 impl Ord for Spoke {
     /// A Spoke is greater than another spoke if it's start time is nearer in the future
     /// and it's end time is strictly less than the other's start time.
     fn cmp(&self, other: &Spoke) -> Ordering {
-        // Flip ordering
-        self.bst
-            .start_time_ms
-            .cmp(&other.bst.start_time_ms)
-            .then(self.bst.end_time_ms.cmp(&other.bst.end_time_ms))
-            .reverse()
+        self.bst.cmp(&other.bst)
     }
 }
 
@@ -198,14 +219,13 @@ impl Eq for Spoke {}
 
 impl PartialOrd for Spoke {
     fn partial_cmp(&self, other: &Spoke) -> Option<Ordering> {
-        Some(self.cmp(other))
+        Some(self.cmp(&other))
     }
 }
 
 impl PartialEq for Spoke {
     fn eq(&self, other: &Spoke) -> bool {
-        self.bst.start_time_ms.eq(&other.bst.start_time_ms) &&
-            self.bst.end_time_ms.eq(&other.bst.end_time_ms)
+        self.bst.eq(&other.bst)
     }
 }
 

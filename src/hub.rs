@@ -1,4 +1,4 @@
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, BTreeMap};
 use std::collections::binary_heap::PeekMut;
 use std::time::SystemTime;
 
@@ -9,7 +9,7 @@ use job::Job;
 const DEFAULT_SPOKE_DURATION_MS: u64 = 10;
 
 pub struct Hub {
-    spokes: BinaryHeap<Spoke>,
+    spokes: BTreeMap<BoundingSpokeTime, Spoke>,
     past_spoke: Spoke,
 }
 
@@ -21,25 +21,30 @@ impl Hub {
     /// past. The hub will always try to walk this spoke first.
     pub fn new() -> Hub {
         Hub {
-            spokes: BinaryHeap::new(),
+            spokes: BTreeMap::new(),
             past_spoke: Spoke::new(0, <u64>::max_value()),
         }
     }
 
     fn add_spoke(&mut self, spoke: Spoke) {
-        self.spokes.push(spoke);
+        self.spokes.insert(spoke.get_bounds(), spoke);
     }
 
     pub fn walk(&mut self) -> Vec<Spoke> {
-        let mut ready_spokes: Vec<Spoke> = vec![];
-        while let Some(peeked) = self.spokes.peek_mut() {
-            if peeked.is_ready() || peeked.is_expired() {
-                ready_spokes.push(PeekMut::pop(peeked));
-            } else {
-                break;
-            }
-        }
-        ready_spokes
+        let mut keys: Vec<BoundingSpokeTime> = self.spokes
+            .keys()
+            .rev()
+            .filter(|k| match self.spokes.get(k) {
+                Some(s) => s.is_expired() || s.is_ready(),
+                _ => false,
+            })
+            .map(|k| k.clone())
+            .collect();
+        return keys.into_iter()
+            .map(|k| self.spokes.remove(&k))
+            .filter(|opt| opt.is_some())
+            .map(|opt| opt.unwrap())
+            .collect();
     }
 
     /// Add a new job to the Hub - the hub will find or create the right spoke for this job
@@ -58,31 +63,32 @@ impl Hub {
     /// Adds a job to the correct spoke based on the Job's trigger time
     fn add_job_to_spokes(&mut self, job: Job) -> Option<Job> {
         unimplemented!()
-        //        let job_bst = Hub::job_bounding_spoke_time(&job);
-        // TODO : WTF!!!!!
-        //        let next_spoke = self.spokes
-        //            .into_sorted_vec()
-        //            .skip_while(|s| {
-        //                s.get_bounds().get_end_time_ms() < job_bst.get_start_time_ms()
-        //            })
-        //            .next();
-        //
-        //        match next_spoke {
-        //            Some(s) => {
-        //                let j = s.add_job(job);
-        //                match j {
-        //                    Some(j) => {
-        //                        // create new spoke?
-        //                        self.add_spoke(Spoke::new_from_bounds(job_bst))
-        //                    }
-        //                    _ => (), // s took the job
-        //                }
-        //            }
-        //            None => {
-        //                // create new spoke
-        //                self.add_spoke(Spoke::new_from_bounds(job_bst))
-        //            }
-        //        }
+//        let job_bst = Hub::job_bounding_spoke_time(&job);
+//        // TODO : WTF!!!!!
+//        let next_spoke = self.spokes
+//            .iter_mut()
+//            .skip_while(|s| {
+//                s.1.get_bounds().get_end_time_ms() < job_bst.get_start_time_ms()
+//            }).next();
+//
+//        match next_spoke {
+//            Some(s) => {
+//                let j = s.1.add_job(job);
+//                match j {
+//                    Some(j) => {
+//                        // create new spoke?
+//                        self.add_spoke(Spoke::new_from_bounds(job_bst));
+//                        return self.add_job_to_spokes(job);
+//                    }
+//                    _ => return None, // s took the job
+//                }
+//            }
+//            None => {
+//                // create new spoke
+//                self.add_spoke(Spoke::new_from_bounds(job_bst));
+//                return self.add_job_to_spokes(job);
+//            }
+//        }
     }
 
     /// Attempts to add a job to the past spoke if the job is in the past and returns None.
