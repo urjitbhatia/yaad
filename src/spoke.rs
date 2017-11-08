@@ -15,6 +15,7 @@ use job::Job;
 /// Each spoke has a start time and a max Duration (inclusive)
 /// Any job that should trigger in this time bound should be handled
 /// by this spoke.
+#[derive(Debug)]
 pub struct Spoke {
     bst: BoundingSpokeTime,
     job_list: BinaryHeap<Job>,
@@ -70,6 +71,7 @@ impl Spoke {
     /// let s = Spoke::new_from_now(Duration::new(5, 0));
     /// s.add_job(Job::new(1, 2, 3, "hi");
     ///```
+    #[allow(dead_code)]
     fn new_from_now(duration_ms: u64) -> Spoke {
         Spoke::new(times::current_time_ms(), duration_ms)
     }
@@ -245,7 +247,7 @@ impl PartialEq for BoundingSpokeTime {
 
 #[cfg(test)]
 mod tests {
-    use super::{Job, Spoke, times};
+    use super::{Job, Spoke, times, BoundingSpokeTime};
     use std::time::Duration;
     use std::thread;
 
@@ -356,5 +358,14 @@ mod tests {
             one > two,
             "Spoke with time interval closer to now should be greater"
         );
+    }
+
+    #[test]
+    fn spoke_from_bounds() {
+        let bst = BoundingSpokeTime::new(500, 800);
+        let spoke = Spoke::new_from_bounds(bst);
+
+        let bst = BoundingSpokeTime::new(500, 799);
+        assert!(spoke.get_bounds().contains(&bst));
     }
 }

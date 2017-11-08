@@ -8,7 +8,6 @@
 //! execution time: a job whose trigger time is closer in the future is `greater` than a job that
 //! is due later.
 
-use std::time::SystemTime;
 use std::cmp::Ordering;
 use times;
 
@@ -46,12 +45,6 @@ impl Job {
             trigger_at_ms,
             body,
         }
-    }
-
-    /// Returns the job's trigger time in the current locale.
-    #[inline]
-    pub fn trigger_at(&self) -> SystemTime {
-        times::ms_to_system_time(self.trigger_at_ms)
     }
 
     /// Returns the job's trigger time as milliseconds from UnixEpoch.
@@ -97,8 +90,7 @@ impl PartialEq for Job {
 
 #[cfg(test)]
 mod tests {
-    use super::Job;
-    use std::cmp::Ordering;
+    use super::*;
 
     #[test]
     fn can_create_job() {

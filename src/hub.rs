@@ -1,6 +1,5 @@
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, BTreeMap};
 use std::collections::binary_heap::PeekMut;
-use std::time::SystemTime;
 
 use times;
 use spoke::{Spoke, BoundingSpokeTime};
@@ -8,9 +7,10 @@ use job::Job;
 
 const DEFAULT_SPOKE_DURATION_MS: u64 = 10;
 
+#[derive(Debug)]
 pub struct Hub {
     bst_heap: BinaryHeap<BoundingSpokeTime>,
-    bst_spoke_map: HashMap<BoundingSpokeTime, Spoke>,
+    bst_spoke_map: BTreeMap<BoundingSpokeTime, Spoke>,
     past_spoke: Spoke,
 }
 
@@ -23,17 +23,20 @@ impl Hub {
     pub fn new() -> Hub {
         Hub {
             bst_heap: BinaryHeap::new(),
-            bst_spoke_map: HashMap::new(),
+            bst_spoke_map: BTreeMap::new(),
             past_spoke: Spoke::new(0, <u64>::max_value()),
         }
     }
 
     fn add_spoke(&mut self, spoke: Spoke) {
+        println!("Adding a new spoke to hub: {:?}", spoke.get_bounds());
         // TODO: Make these two operations atomic?
         self.bst_heap.push(spoke.get_bounds());
         self.bst_spoke_map.insert(spoke.get_bounds(), spoke);
     }
 
+    /// Walk returns a Vector of Spokes that should be consumed next
+    /// Calls to this method can return empty vectors if no spokes are ready yet.
     pub fn walk(&mut self) -> Vec<Spoke> {
         let mut ready_spokes: Vec<Spoke> = vec![];
 
@@ -53,52 +56,60 @@ impl Hub {
     /// Add a new job to the Hub - the hub will find or create the right spoke for this job
     pub fn add_job(&mut self, job: Job) {
         // If None, past spoke accepted the job, else find the right spoke for it
+        println!("\nAdding job to hub. Job trigger: {}", job.trigger_at_ms());
         match self.maybe_add_job_to_past(job) {
             Some(j) => {
                 if self.add_job_to_spokes(j).is_some() {
                     panic!("Hub should always accept a job")
                 }
             }
-            None => return,
+            None => (),
         };
     }
 
     /// Adds a job to the correct spoke based on the Job's trigger time
     fn add_job_to_spokes(&mut self, job: Job) -> Option<Job> {
-        unimplemented!()
-        //        let job_bst = Hub::job_bounding_spoke_time(&job);
-        // TODO : WTF!!!!!
-        //        let next_spoke = self.spokes
-        //            .into_sorted_vec()
-        //            .skip_while(|s| {
-        //                s.get_bounds().get_end_time_ms() < job_bst.get_start_time_ms()
-        //            })
-        //            .next();
-        //
-        //        match next_spoke {
-        //            Some(s) => {
-        //                let j = s.add_job(job);
-        //                match j {
-        //                    Some(j) => {
-        //                        // create new spoke?
-        //                        self.add_spoke(Spoke::new_from_bounds(job_bst))
-        //                    }
-        //                    _ => (), // s took the job
-        //                }
-        //            }
-        //            None => {
-        //                // create new spoke
-        //                self.add_spoke(Spoke::new_from_bounds(job_bst))
-        //            }
-        //        }
+        let job_bst = Hub::job_bounding_spoke_time(&job);
+        match {
+            // Try to skip as many bounds as possible : these bounds are before this job's bound
+            let next_spoke = self.bst_spoke_map
+                .iter_mut()
+                .skip_while(|s| s.0 < &job_bst)
+                .next();
+            // This next spoke is a candidate that might accept this job
+            match next_spoke {
+                Some(s) => {
+                    println!("\nFound potential next spoke");
+                    // If spoke exists, try to give it the job
+                    match s.1.add_job(job) {
+                        // Spoke rejected the job and returned it to us, return to top level match
+                        Some(j) => Some(j),
+                        // Spoke accepted the job, yay!!
+                        None => None,
+                    }
+                }
+                // No spoke found, that we either didn't have a spoke or this job is
+                // too far in the future
+                None => Some(job),
+            }
+        } {
+            // If we weren't able to assign this job yet, create a spoke that might accept it
+            Some(j) => {
+                self.add_spoke(Spoke::new_from_bounds(job_bst));
+                // Try adding job again, recursively
+                self.add_job_to_spokes(j)
+            }
+            None => None,
+        }
     }
 
     /// Attempts to add a job to the past spoke if the job is in the past and returns None.
     /// Otherwise, returns Some(job)
     fn maybe_add_job_to_past(&mut self, job: Job) -> Option<Job> {
         // If job is old, add to the past spoke
-        if job.trigger_at() <= SystemTime::now() {
+        if job.trigger_at_ms() <= times::current_time_ms() {
             // This job should be handed to the past spoke
+            println!("This job is older then current time");
             match self.past_spoke.add_job(job) {
                 Some(_) => panic!("Past spoke should always accept a job"),
                 None => return None,
@@ -225,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    fn hub_walk_returns_multiple_ready_jobs() {
+    fn hub_walk_returns_multiple_ready_spokes() {
         // |
         // |     spoke1                           spoke2         walk1([s2,])
         // | s1<---------5ms--------->s1+5 .2ms. s2(s1+7)<--------5ms--------->s2+50
@@ -279,5 +290,34 @@ mod tests {
             bst.get_end_time_ms() - bst.get_start_time_ms(),
             super::DEFAULT_SPOKE_DURATION_MS
         );
+    }
+
+    #[test]
+    fn add_job_to_hub() {
+        let start_time_ms = times::current_time_ms();
+        let mut hub = Hub::new();
+        hub.add_job(Job::new(1, 1, start_time_ms + 2, "one spoke"));
+        hub.add_job(Job::new(3, 3, start_time_ms + 3, "one spoke"));
+        hub.add_job(Job::new(
+            2,
+            2,
+            start_time_ms + super::DEFAULT_SPOKE_DURATION_MS*2 + 4,
+            "foo",
+        ));
+        hub.add_job(Job::new(
+            4,
+            4,
+            start_time_ms + super::DEFAULT_SPOKE_DURATION_MS*2 + 5,
+            "foo",
+        ));
+        assert_eq!(hub.bst_spoke_map.len(), 2);
+        // wait for first spoke to become ready
+        thread::park_timeout(Duration::from_millis(6));
+        println!("Test Diagnostic: current time ms: {}", times::current_time_ms());
+        let mut walk_one = hub.walk();
+        assert_eq!(walk_one.len(), 1);
+
+        let spoke_walk_one = walk_one[0].walk();
+        assert_eq!(spoke_walk_one.len(), 2);
     }
 }
