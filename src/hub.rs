@@ -301,19 +301,22 @@ mod tests {
         hub.add_job(Job::new(
             2,
             2,
-            start_time_ms + super::DEFAULT_SPOKE_DURATION_MS*2 + 4,
+            start_time_ms + super::DEFAULT_SPOKE_DURATION_MS * 2 + 4,
             "foo",
         ));
         hub.add_job(Job::new(
             4,
             4,
-            start_time_ms + super::DEFAULT_SPOKE_DURATION_MS*2 + 5,
+            start_time_ms + super::DEFAULT_SPOKE_DURATION_MS * 2 + 5,
             "foo",
         ));
         assert_eq!(hub.bst_spoke_map.len(), 2);
         // wait for first spoke to become ready
         thread::park_timeout(Duration::from_millis(6));
-        println!("Test Diagnostic: current time ms: {}", times::current_time_ms());
+        println!(
+            "Test Diagnostic: current time ms: {}",
+            times::current_time_ms()
+        );
         let mut walk_one = hub.walk();
         assert_eq!(walk_one.len(), 1);
 
