@@ -133,6 +133,7 @@ impl Hub {
 #[cfg(test)]
 mod tests {
     const TEST_SPOKE_DURATION_MS: u64 = 10;
+
     use super::{Spoke, Hub, Job, times};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use std::thread;
