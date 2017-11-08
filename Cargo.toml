@@ -4,12 +4,4 @@ version = "0.1.0"
 authors = ["Urjit Singh Bhatia <urjitsb87@gmail.com>"]
 
 [dependencies]
-bincode = "0.9.2"
-bytes = "0.4.5"
-flate2 = "0.2"
-io = "0.0.2"
-serde = "1.0"
-serde_derive = "1.0"
-serde_json = "1.0.4"
-time = "0.1"
-chroniker = "0.5.1"
+rand = "0.3"
