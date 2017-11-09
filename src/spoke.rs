@@ -56,8 +56,7 @@ impl BoundingSpokeTime {
 
     #[inline]
     pub fn is_expired(&self) -> bool {
-        let now = times::current_time_ms();
-        self.end_time_ms < now
+        self.end_time_ms < times::current_time_ms()
     }
 }
 

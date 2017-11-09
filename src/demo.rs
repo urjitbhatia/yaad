@@ -51,17 +51,23 @@ pub fn demo() {
                 times::current_time_ms()
             );
             while job_counter > 0 {
-                h.walk_jobs().iter().for_each(|j| {
-                    println!(
-                        "Ready job: {} to be triggered at: {} current time: {}",
-                        j.get_body(),
-                        j.trigger_at_ms(),
-                        times::current_time_ms()
-                    );
-                    job_counter -= 1;
-                    println!("Remaining: {} jobs", job_counter);
-                    thread::park_timeout(Duration::from_millis(100));
-                });
+                match h.next() {
+                    Some(jobs) => {
+                        jobs.iter().for_each(|j| {
+                            println!(
+                                "Ready job: {} to be triggered at: {} current time: {}",
+                                j.get_body(),
+                                j.trigger_at_ms(),
+                                times::current_time_ms()
+                            );
+                            job_counter -= 1;
+                            println!("Remaining: {} jobs", job_counter);
+                            thread::park_timeout(Duration::from_millis(100));
+                        })
+                    }
+                    _ => (),
+                }
+                thread::park_timeout(Duration::from_millis(100));
             }
         }
 

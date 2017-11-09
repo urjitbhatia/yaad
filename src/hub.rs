@@ -7,6 +7,7 @@ use job::Job;
 
 #[derive(Debug)]
 pub struct Hub {
+    curr_bst: Option<BoundingSpokeTime>,
     spoke_duration_ms: u64,
     bst_heap: BinaryHeap<BoundingSpokeTime>,
     bst_spoke_map: BTreeMap<BoundingSpokeTime, Spoke>,
@@ -21,6 +22,7 @@ impl Hub {
     /// past. The hub will always try to walk this spoke first.
     pub fn new(spoke_duration_ms: u64) -> Hub {
         Hub {
+            curr_bst: None,
             spoke_duration_ms,
             bst_heap: BinaryHeap::new(),
             bst_spoke_map: BTreeMap::new(),
@@ -146,6 +148,61 @@ impl Hub {
             }
         }
         past_jobs
+    }
+}
+
+impl Iterator for Hub {
+    type Item = Vec<Job>;
+    fn next(&mut self) -> Option<Vec<Job>> {
+        // check the past spoke first
+        let past_jobs = self.past_spoke.walk();
+        if past_jobs.len() > 0 {
+            // Always check past jobs spoke first
+            return Some(past_jobs);
+        };
+
+        // If we have a current spoke
+        if self.curr_bst.is_some() {
+            match self.bst_spoke_map.get_mut(&self.curr_bst.unwrap()) {
+                Some(s) => {
+                    // Get all the jobs for this spoke
+                    let jobs = s.walk();
+                    if jobs.len() > 0 {
+                        // Return if we found jobs
+                        return Some(jobs);
+                    }
+                }
+                _ => (),
+            }
+        } else {
+            // If we don't have a current spoke, then pop the next one and return a None
+            self.curr_bst = self.bst_heap.pop();
+            return None;
+        }
+
+        // Check if the current bst spoke has expired and has no more pending jobs to offer
+        let expired = match self.bst_spoke_map.get_mut(&self.curr_bst.unwrap()) {
+            Some(s) => {
+                if s.is_expired() && s.pending_job_len() == 0 {
+                    // Yes, return the bst to be expired
+                    Some(self.curr_bst.unwrap())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        // If expired, remove from map, unset the current curr_bst - this is now in the past and
+        // won't accept new jobs anymore
+        match expired {
+            Some(s) => {
+                self.curr_bst = None;
+                self.bst_spoke_map.remove(&s);
+            }
+            _ => (),
+        }
+        // We did't find any jobs to return
+        None
     }
 }
 
@@ -310,8 +367,8 @@ mod tests {
 
         // This job's bounds should be: ms_from_epoch -> ms_from_epoch + 10
         let bst = self::Hub::job_bounding_spoke_time(&j, TEST_SPOKE_DURATION_MS);
-        assert!(bst.get_start_time_ms() <= job_trigger_at_ms);
-        assert!(job_trigger_at_ms <= bst.get_end_time_ms());
+        assert!(bst.get_start_time_ms() < = job_trigger_at_ms);
+        assert!(job_trigger_at_ms < = bst.get_end_time_ms());
         assert_eq!(
             bst.get_end_time_ms() - bst.get_start_time_ms(),
             TEST_SPOKE_DURATION_MS
