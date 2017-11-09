@@ -15,9 +15,19 @@ use times;
 ///internal_id will overflow after max value - internal functioning should not be affected.
 #[derive(Debug)]
 pub struct Job {
+    job_metadata: JobMetadata,
+    body: JobBody,
+}
+
+#[derive(Debug)]
+struct JobMetadata {
     pub internal_id: u64,
     external_id: u64,
     trigger_at_ms: u64,
+}
+
+#[derive(Debug)]
+struct JobBody {
     body: String,
 }
 
@@ -27,26 +37,41 @@ impl Job {
     pub fn new(internal_id: u64, external_id: u64, trigger_at_ms: u64, body: &str) -> Job {
         let body = body.to_owned();
         Job {
-            internal_id,
-            external_id,
-            trigger_at_ms,
-            body,
+            job_metadata: JobMetadata {
+                internal_id,
+                external_id,
+                trigger_at_ms,
+            },
+
+            body: JobBody { body },
         }
     }
 
     /// Creates new job that doesn't need an external id. An external id will not be generated in
     /// this case.
     pub fn new_without_external_id(internal_id: u64, trigger_at_ms: u64, body: &str) -> Job {
-        let body = body.to_owned();
-        let external_id = 0u64;
-        Job {
-            internal_id,
-            external_id,
-            trigger_at_ms,
-            body,
-        }
+        Job::new(internal_id, 0, trigger_at_ms, body)
     }
 
+    /// Returns the job's trigger time as milliseconds from UnixEpoch.
+    #[inline]
+    pub fn trigger_at_ms(&self) -> u64 {
+        self.job_metadata.trigger_at_ms()
+    }
+
+    /// Returns true if the job should trigger right now.
+    #[inline]
+    pub fn is_ready(&self) -> bool {
+        self.job_metadata.is_ready()
+    }
+
+    #[inline]
+    pub fn get_body(&self) -> String {
+        self.body.body.clone()
+    }
+}
+
+impl JobMetadata {
     /// Returns the job's trigger time as milliseconds from UnixEpoch.
     #[inline]
     pub fn trigger_at_ms(&self) -> u64 {
@@ -58,11 +83,6 @@ impl Job {
     pub fn is_ready(&self) -> bool {
         self.trigger_at_ms <= times::current_time_ms()
     }
-
-    #[inline]
-    pub fn get_body(&self) -> String {
-        self.body.clone()
-    }
 }
 
 impl Ord for Job {
@@ -70,7 +90,7 @@ impl Ord for Job {
     fn cmp(&self, other: &Job) -> Ordering {
         // Flip ordering - we want min heap
         // Close trigger time means job > further trigger_at time.
-        self.trigger_at_ms.cmp(&other.trigger_at_ms).reverse()
+        self.job_metadata.cmp(&other.job_metadata)
     }
 }
 
@@ -86,6 +106,31 @@ impl PartialOrd for Job {
 impl PartialEq for Job {
     /// A job's equality depends on the equality of either internal or external id
     fn eq(&self, other: &Job) -> bool {
+        self.job_metadata.eq(&other.job_metadata)
+    }
+}
+
+impl Ord for JobMetadata {
+    /// A Job is greater than another job if the job's trigger time will happen before the other's
+    fn cmp(&self, other: &JobMetadata) -> Ordering {
+        // Flip ordering - we want min heap
+        // Close trigger time means job > further trigger_at time.
+        self.trigger_at_ms.cmp(&other.trigger_at_ms).reverse()
+    }
+}
+
+impl Eq for JobMetadata {}
+
+impl PartialOrd for JobMetadata {
+    fn partial_cmp(&self, other: &JobMetadata) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// PartialEq for a Job type ignores the `external_id` if it isn't set on either job being compared
+impl PartialEq for JobMetadata {
+    /// A job's equality depends on the equality of either internal or external id
+    fn eq(&self, other: &JobMetadata) -> bool {
         if self.external_id == 0 || other.external_id == 0 {
             return self.internal_id == other.internal_id;
         }
@@ -100,7 +145,7 @@ mod tests {
     #[test]
     fn can_create_job() {
         let j = Job::new(100u64, 150u64, 5u64, "Test Body");
-        assert_eq!(j.internal_id, 100u64, "Should be able to create a job");
+        assert_eq!(j.job_metadata.internal_id, 100u64, "Should be able to create a job");
     }
 
     #[test]
