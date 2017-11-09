@@ -1,4 +1,4 @@
-use std::collections::{BinaryHeap, BTreeMap};
+use std::collections::{BinaryHeap, BTreeMap, HashMap};
 use std::collections::binary_heap::PeekMut;
 
 use times;
@@ -10,6 +10,8 @@ pub struct Hub {
     spoke_duration_ms: u64,
     bst_heap: BinaryHeap<BoundingSpokeTime>,
     bst_spoke_map: BTreeMap<BoundingSpokeTime, Spoke>,
+    job_iid_bst_map: HashMap<u64, BoundingSpokeTime>,
+    job_eid_bst_map: HashMap<u64, BoundingSpokeTime>,
     past_spoke: Spoke,
 }
 
@@ -24,6 +26,8 @@ impl Hub {
             spoke_duration_ms,
             bst_heap: BinaryHeap::new(),
             bst_spoke_map: BTreeMap::new(),
+            job_eid_bst_map: HashMap::new(),
+            job_iid_bst_map: HashMap::new(),
             past_spoke: Spoke::new(0, <u64>::max_value()),
         }
     }
@@ -185,9 +189,7 @@ mod tests {
     #[test]
     fn can_add_job_to_past() {
         let mut h = Hub::new(TEST_SPOKE_DURATION_MS);
-        h.add_job(Job::new(
-            1,
-            1,
+        h.add_job(Job::new_auto_id(
             times::current_time_ms() - 10_000,
             "I am old",
         ));
@@ -306,7 +308,7 @@ mod tests {
         // ms from epoch down to closest 10 and then add 10ms
         let ms_from_epoch = ms_from_epoch + 10;
         let job_trigger_at_ms = ms_from_epoch + 7;
-        let j = Job::new(1, 1, job_trigger_at_ms, "foo");
+        let j = Job::new_auto_id(job_trigger_at_ms, "foo");
 
         // This job's bounds should be: ms_from_epoch -> ms_from_epoch + 10
         let bst = self::Hub::job_bounding_spoke_time(&j, TEST_SPOKE_DURATION_MS);
@@ -322,17 +324,13 @@ mod tests {
     fn add_job_to_hub() {
         let start_time_ms = times::current_time_ms();
         let mut hub = Hub::new(TEST_SPOKE_DURATION_MS);
-        hub.add_job(Job::new(1, 1, start_time_ms + 2, "one spoke"));
-        hub.add_job(Job::new(3, 3, start_time_ms + 3, "one spoke"));
-        hub.add_job(Job::new(
-            2,
-            2,
+        hub.add_job(Job::new_auto_id(start_time_ms + 2, "one spoke"));
+        hub.add_job(Job::new_auto_id(start_time_ms + 3, "one spoke"));
+        hub.add_job(Job::new_auto_id(
             start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4,
             "foo",
         ));
-        hub.add_job(Job::new(
-            4,
-            4,
+        hub.add_job(Job::new_auto_id(
             start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 5,
             "foo",
         ));

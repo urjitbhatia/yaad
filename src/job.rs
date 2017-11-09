@@ -8,6 +8,7 @@
 //! execution time: a job whose trigger time is closer in the future is `greater` than a job that
 //! is due later.
 
+use uuid::{Uuid, UuidVersion};
 use std::cmp::Ordering;
 use times;
 
@@ -21,8 +22,7 @@ pub struct Job {
 
 #[derive(Debug, Copy, Clone)]
 pub struct JobMetadata {
-    internal_id: u64,
-    external_id: u64,
+    id: Uuid,
     trigger_at_ms: u64,
 }
 
@@ -34,16 +34,21 @@ pub struct JobBody {
 impl Job {
     /// Creates a new job given an internal id, external id, trigger time in ms and the body.
     /// TODO: This does not handle id collisions properly yet.
-    pub fn new(internal_id: u64, external_id: u64, trigger_at_ms: u64, body: &str) -> Job {
-        let body = body.to_owned();
-        Job {
-            job_metadata: JobMetadata {
-                internal_id,
-                external_id,
-                trigger_at_ms,
-            },
-
-            body: JobBody { body },
+    pub fn new(id: Uuid, trigger_at_ms: u64, body: &str) -> Job {
+        match id.get_version() {
+            Some(ver) => {
+                match ver {
+                    UuidVersion::Random => {
+                        let body = body.to_owned();
+                        Job {
+                            job_metadata: JobMetadata { id, trigger_at_ms },
+                            body: JobBody { body },
+                        }
+                    }
+                    _ => panic!("Only uuid v4 ids are accepted"),
+                }
+            }
+            _ => panic!("Only uuid v4 ids are accepted"),
         }
     }
 
@@ -53,8 +58,8 @@ impl Job {
 
     /// Creates new job that doesn't need an external id. An external id will not be generated in
     /// this case.
-    pub fn new_without_external_id(internal_id: u64, trigger_at_ms: u64, body: &str) -> Job {
-        Job::new(internal_id, 0, trigger_at_ms, body)
+    pub fn new_auto_id(trigger_at_ms: u64, body: &str) -> Job {
+        Job::new(Uuid::new_v4(), trigger_at_ms, body)
     }
 
     /// Returns the job's trigger time as milliseconds from UnixEpoch.
@@ -81,8 +86,8 @@ impl Job {
 }
 
 impl JobMetadata {
-    pub fn new(internal_id: u64, external_id: u64, trigger_at_ms: u64) -> JobMetadata {
-        JobMetadata { internal_id, external_id, trigger_at_ms }
+    pub fn new(id: Uuid, trigger_at_ms: u64) -> JobMetadata {
+        JobMetadata { id, trigger_at_ms }
     }
 
     /// Returns the job's trigger time as milliseconds from UnixEpoch.
@@ -98,8 +103,8 @@ impl JobMetadata {
     }
 
     #[inline]
-    pub fn get_id_tuple(&self) -> (u64, u64) {
-        (self.internal_id, self.external_id)
+    pub fn get_id(&self) -> (Uuid) {
+        self.id.clone()
     }
 }
 
@@ -149,10 +154,7 @@ impl PartialOrd for JobMetadata {
 impl PartialEq for JobMetadata {
     /// A job's equality depends on the equality of either internal or external id
     fn eq(&self, other: &JobMetadata) -> bool {
-        if self.external_id == 0 || other.external_id == 0 {
-            return self.internal_id == other.internal_id;
-        }
-        self.internal_id == other.internal_id || self.external_id == other.external_id
+        self.id.eq(&other.id)
     }
 }
 
@@ -162,74 +164,20 @@ mod tests {
 
     #[test]
     fn can_create_job() {
-        let j = Job::new(100u64, 150u64, 5u64, "Test Body");
-        assert_eq!(
-            j.job_metadata.internal_id,
-            100u64,
-            "Should be able to create a job"
-        );
+        let id = Uuid::new_v4();
+        let j = Job::new(id, 5u64, "Test Body");
+        assert_eq!(j.job_metadata.id, id, "Should be able to create a job");
     }
 
     #[test]
-    fn internal_id_equality() {
-        let j_one = Job::new(100u64, 200u64, 5u64, "foo one");
-        let j_two = Job::new(100u64, 300u64, 5u64, "foo two");
+    fn id_equality() {
+        let id = Uuid::new_v4();
+        let j_one = Job::new(id, 100, "foo one");
+        let j_two = Job::new(id, 100, "foo two");
         assert_eq!(
             j_one,
             j_two,
-            "Job: {:?} should eq: {:?} Same internal id, diff external id",
-            j_one,
-            j_two
-        )
-    }
-
-    #[test]
-    fn external_id_equality() {
-        let j_one = Job::new(100u64, 200u64, 5u64, "foo one");
-        let j_two = Job::new(200u64, 200u64, 5u64, "foo two");
-        assert_eq!(
-            j_one,
-            j_two,
-            "Job: {:?} should eq: {:?} Same external id, diff internal id",
-            j_one,
-            j_two
-        )
-    }
-
-    #[test]
-    fn external_internal_id_equality() {
-        let j_one = Job::new(100u64, 200u64, 5u64, "foo one");
-        let j_two = Job::new(100u64, 200u64, 6u64, "foo two");
-        assert_eq!(
-            j_one,
-            j_two,
-            "Job: {:?} should eq: {:?} Same external id, same internal id, diff trigger_at",
-            j_one,
-            j_two
-        )
-    }
-
-    #[test]
-    fn eq_missing_external_id_equality() {
-        let j_one = Job::new_without_external_id(100u64, 5u64, "foo one");
-        let j_two = Job::new(100u64, 100u64, 6u64, "foo two");
-        assert_eq!(
-            j_one,
-            j_two,
-            "Job: {:?} should eq: {:?} Missing external id, same internal id",
-            j_one,
-            j_two
-        )
-    }
-
-    #[test]
-    fn neq_missing_external_id_equality() {
-        let j_one = Job::new_without_external_id(100u64, 5u64, "foo one");
-        let j_two = Job::new(200u64, 1030u64, 6u64, "foo two");
-        assert_ne!(
-            j_one,
-            j_two,
-            "Job: {:?} should neq: {:?} Same internal id, missing external id, diff trigger_at",
+            "Job: {:?} should be eq: {:?} when ids are same",
             j_one,
             j_two
         )
@@ -237,22 +185,22 @@ mod tests {
 
     #[test]
     fn job_ordering_test() {
-        let one = Job::new(1, 1, 1, "one");
-        let two = Job::new(2, 2, 2, "two");
+        let one = Job::new_auto_id(1, "one");
+        let two = Job::new_auto_id(2, "two");
         assert!(
             one > two,
             "A job with trigger time closer in the future is smaller in ordering"
         );
 
-        let one = Job::new(1, 1, 2, "one");
-        let two = Job::new(2, 2, 1, "two");
+        let one = Job::new_auto_id(2, "one");
+        let two = Job::new_auto_id(1, "two");
         assert!(
             one < two,
             "A job with trigger time closer in the future is greater in ordering"
         );
 
-        let one = Job::new(1, 1, 2, "one");
-        let two = Job::new(2, 2, 2, "two");
+        let one = Job::new_auto_id(2, "one");
+        let two = Job::new_auto_id(2, "two");
         assert_eq!(
             one.cmp(&two),
             Ordering::Equal,

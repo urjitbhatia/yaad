@@ -28,9 +28,7 @@ pub fn demo() {
                     1
                 }
             };
-            let j = Job::new(
-                job_counter,
-                job_counter,
+            let j = Job::new_auto_id(
                 times::current_time_ms() + ((num * 1_000.0) as u64 * time_mult),
                 job_sample_bodies.index((r.next_u32() % 3) as usize),
             );

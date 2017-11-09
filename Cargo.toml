@@ -5,3 +5,4 @@ authors = ["Urjit Singh Bhatia <urjitsb87@gmail.com>"]
 
 [dependencies]
 rand = "0.3"
+uuid = {version="0.4", features=["v4"]}
