@@ -36,7 +36,7 @@ pub fn demo() {
             );
             job_counter += 1;
             println!(
-                "\nAdding demo job: {} :: Trigger at {:?} ms from now",
+                "\nAdding demo job: {:?} :: Trigger at {:?} ms from now",
                 j.get_body(),
                 j.trigger_at_ms() - times::current_time_ms()
             );
@@ -53,7 +53,7 @@ pub fn demo() {
             while job_counter > 0 {
                 h.walk_jobs().iter().for_each(|j| {
                     println!(
-                        "Ready job: {} to be triggered at: {} current time: {}",
+                        "Ready job: {:?} to be triggered at: {} current time: {}",
                         j.get_body(),
                         j.trigger_at_ms(),
                         times::current_time_ms()

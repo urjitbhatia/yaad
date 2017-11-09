@@ -19,15 +19,15 @@ pub struct Job {
     body: JobBody,
 }
 
-#[derive(Debug)]
-struct JobMetadata {
-    pub internal_id: u64,
+#[derive(Debug, Copy, Clone)]
+pub struct JobMetadata {
+    internal_id: u64,
     external_id: u64,
     trigger_at_ms: u64,
 }
 
-#[derive(Debug)]
-struct JobBody {
+#[derive(Debug, Clone)]
+pub struct JobBody {
     body: String,
 }
 
@@ -45,6 +45,10 @@ impl Job {
 
             body: JobBody { body },
         }
+    }
+
+    pub fn new_from_metadata(job_metadata: JobMetadata, body: JobBody) -> Job {
+        Job { job_metadata, body }
     }
 
     /// Creates new job that doesn't need an external id. An external id will not be generated in
@@ -66,12 +70,21 @@ impl Job {
     }
 
     #[inline]
-    pub fn get_body(&self) -> String {
-        self.body.body.clone()
+    pub fn get_body(&self) -> JobBody {
+        self.body.clone()
+    }
+
+    #[inline]
+    pub fn get_metadata(&self) -> JobMetadata {
+        self.job_metadata.clone()
     }
 }
 
 impl JobMetadata {
+    pub fn new(internal_id: u64, external_id: u64, trigger_at_ms: u64) -> JobMetadata {
+        JobMetadata { internal_id, external_id, trigger_at_ms }
+    }
+
     /// Returns the job's trigger time as milliseconds from UnixEpoch.
     #[inline]
     pub fn trigger_at_ms(&self) -> u64 {
@@ -82,6 +95,11 @@ impl JobMetadata {
     #[inline]
     pub fn is_ready(&self) -> bool {
         self.trigger_at_ms <= times::current_time_ms()
+    }
+
+    #[inline]
+    pub fn get_id_tuple(&self) -> (u64, u64) {
+        (self.internal_id, self.external_id)
     }
 }
 
@@ -145,7 +163,11 @@ mod tests {
     #[test]
     fn can_create_job() {
         let j = Job::new(100u64, 150u64, 5u64, "Test Body");
-        assert_eq!(j.job_metadata.internal_id, 100u64, "Should be able to create a job");
+        assert_eq!(
+            j.job_metadata.internal_id,
+            100u64,
+            "Should be able to create a job"
+        );
     }
 
     #[test]

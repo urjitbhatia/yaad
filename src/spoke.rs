@@ -1,14 +1,14 @@
 //! A Spoke is a list of jobs whose trigger times fall within the Spoke's duration of
 //! responsibility.
 
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::collections::binary_heap::PeekMut;
 use std::fmt;
 use std::cmp::Ordering;
 use times;
 
 // our module
-use job::Job;
+use job::{Job, JobMetadata, JobBody};
 
 /// A Spoke is a time-bound chain of jobs
 ///
@@ -18,7 +18,10 @@ use job::Job;
 #[derive(Debug)]
 pub struct Spoke {
     bst: BoundingSpokeTime,
-    job_list: BinaryHeap<Job>,
+    job_eid_map: HashMap<u64, u64>,
+    job_iid_map: HashMap<u64, JobBody>,
+    job_list: BinaryHeap<JobMetadata>,
+    // Todo rename to job_queue?
 }
 
 #[derive(Debug, Copy, Clone, Eq, Hash)]
@@ -77,8 +80,15 @@ impl Spoke {
     }
 
     pub fn new_from_bounds(bst: BoundingSpokeTime) -> Spoke {
+        let job_eid_map = HashMap::new();
+        let job_iid_map = HashMap::new();
         let job_list = BinaryHeap::new();
-        Spoke { bst, job_list }
+        Spoke {
+            bst,
+            job_eid_map,
+            job_iid_map,
+            job_list,
+        }
     }
     /// Constructs a new Spoke - a time bound chain of jobs starting at the current time
     /// # Example
@@ -91,12 +101,11 @@ impl Spoke {
     ///```
     pub fn new(start_time_ms: u64, duration_ms: u64) -> Spoke {
         let end_time_ms = start_time_ms + duration_ms;
-        let job_list = BinaryHeap::new();
         let bst = BoundingSpokeTime {
             start_time_ms,
             end_time_ms,
         };
-        Spoke { bst, job_list }
+        Spoke::new_from_bounds(bst)
     }
 
     /// Add a new job into the Spoke - the job is optionally returned if the Spoke is not the right
@@ -110,11 +119,19 @@ impl Spoke {
         }
         if self.bst.start_time_ms <= job.trigger_at_ms() &&
             job.trigger_at_ms() < self.bst.end_time_ms
-        {
-            // Only accept jobs that are this spoke's responsibility
-            self.job_list.push(job);
-            return Option::None;
-        } else {
+            {
+                // Only accept jobs that are this spoke's responsibility
+                let jm = job.get_metadata();
+                let (iid, eid) = jm.get_id_tuple();
+
+                println!("Inserting jm: {:?}", jm);
+                self.job_iid_map.insert(iid, job.get_body());
+                if eid != 0 {
+                    self.job_eid_map.insert(eid, iid);
+                }
+                self.job_list.push(jm);
+                return Option::None;
+            } else {
             // Return jobs that you don't want to accept
             return Option::from(job);
         }
@@ -143,13 +160,50 @@ impl Spoke {
 
         while let Some(peeked) = self.job_list.peek_mut() {
             if peeked.is_ready() {
-                let j = PeekMut::pop(peeked);
-                ready_jobs.push(j)
+                let jm = PeekMut::pop(peeked);
+                let (iid, eid) = jm.get_id_tuple();
+                self.job_eid_map.remove(&eid);
+                match self.job_iid_map.remove(&iid) {
+                    Some(b) => ready_jobs.push(Job::new_from_metadata(jm, b)),
+                    None => (),
+                }
             } else {
                 break;
             }
         }
         ready_jobs
+    }
+
+    pub fn cancel_job(&mut self, jm: JobMetadata) -> bool {
+        let (iid, eid) = jm.get_id_tuple();
+        println!("Trying to cancel job{:?}", jm);
+        match eid {
+            0 => {
+                // Try to delete using internal id then
+                match iid {
+                    0 => panic!("Need non 0 internal id or external id to delete"),
+                    _ => {
+                        match self.job_iid_map.remove(&iid) {
+                            Some(_) => true,
+                            None => false
+                        }
+                    }
+                }
+            }
+            _ => {
+                println!("Removing from eid map: {:?}", self.job_eid_map.len());
+                match self.job_eid_map.remove(&eid) {
+                    Some(iid) => {
+                        println!("Removing from iid map");
+                        match self.job_iid_map.remove(&iid) {
+                            Some(_) => true,
+                            None => false
+                        }
+                    }
+                    None => false
+                }
+            }
+        }
     }
 
     /// Returns the number of jobs pending in this spoke
@@ -215,7 +269,7 @@ impl PartialOrd for Spoke {
 
 impl PartialEq for Spoke {
     fn eq(&self, other: &Spoke) -> bool {
-        self.bst.start_time_ms.eq(&other.bst.start_time_ms) &&
+        self.bst.start_time_ms.eq(&other.bst.start_time_ms) & &
             self.bst.end_time_ms.eq(&other.bst.end_time_ms)
     }
 }
@@ -240,13 +294,13 @@ impl PartialOrd for BoundingSpokeTime {
 
 impl PartialEq for BoundingSpokeTime {
     fn eq(&self, other: &BoundingSpokeTime) -> bool {
-        self.start_time_ms.eq(&other.start_time_ms) && self.end_time_ms.eq(&other.end_time_ms)
+        self.start_time_ms.eq(&other.start_time_ms) & &self.end_time_ms.eq(&other.end_time_ms)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Job, Spoke, times, BoundingSpokeTime};
+    use super::*;
     use std::time::Duration;
     use std::thread;
 
@@ -278,7 +332,7 @@ mod tests {
         let current_time = times::current_time_ms();
         let mut s: Spoke = Spoke::new(current_time, 1000);
         s.add_job(Job::new(1u64, 1u64, current_time + 300, "I am Job"));
-        s.add_job(Job::new(1u64, 1u64, current_time + 523, "I am Job"));
+        s.add_job(Job::new(2u64, 2u64, current_time + 523, "I am Job"));
         // wait 750 for jobs to be active
         thread::park_timeout(Duration::from_millis(750));
         let res = s.walk();
@@ -292,7 +346,7 @@ mod tests {
         println!("Spoke list idempotent: {:p}", &s);
         s.add_job(Job::new(1u64, 1u64, current_time + 500, "I am Job"));
         println!("Spoke list idempotent: {:p}", &s);
-        s.add_job(Job::new(1u64, 1u64, current_time + 500, "I am Job"));
+        s.add_job(Job::new(2u64, 2u64, current_time + 500, "I am Job"));
         // wait 3/4 sec
         thread::park_timeout(Duration::from_millis(750));
         let first_job_set = s.walk();
@@ -366,5 +420,43 @@ mod tests {
 
         let bst = BoundingSpokeTime::new(500, 799);
         assert!(spoke.get_bounds().contains(&bst));
+    }
+
+    #[test]
+    fn can_cancel_job() {
+        let current_ms = times::current_time_ms();
+        let mut s: Spoke = Spoke::new_from_now(10_000);
+
+        let j_one = Job::new(1, 1, current_ms + 600, "one");
+        let j_two = Job::new(2, 2, current_ms + 700, "two");
+        let j_three = Job::new_without_external_id(3, current_ms + 700, "three");
+
+        s.add_job(j_one);
+        s.add_job(j_two);
+        s.add_job(j_three);
+
+        assert_eq!(s.pending_job_len(), 3);
+
+        // Cancel
+        assert!(s.cancel_job(JobMetadata::new(1, 1, 0)));
+        // Job is gone, more cancels are idempotent
+        assert!(!s.cancel_job(JobMetadata::new(0, 1, 0)));
+        assert!(!s.cancel_job(JobMetadata::new(1, 0, 0)));
+
+        // Cancel
+        assert!(s.cancel_job(JobMetadata::new(0, 2, 0)));
+        // Idempotent
+        assert!(!s.cancel_job(JobMetadata::new(2, 2, 0)));
+        assert!(!s.cancel_job(JobMetadata::new(2, 0, 0)));
+
+        // Cancel
+        assert!(s.cancel_job(JobMetadata::new(3, 0, 0)));
+    }
+
+    #[test]
+    #[should_panic]
+    fn cancel_panic_when_no_id() {
+        let mut s: Spoke = Spoke::new_from_now(10_000);
+        s.cancel_job(JobMetadata::new(0,0,0));
     }
 }
