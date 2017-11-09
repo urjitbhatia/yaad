@@ -175,6 +175,10 @@ impl Spoke {
         }
     }
 
+    pub fn owns_job(&self, id: Uuid) -> bool {
+        self.job_id_map.contains_key(&id)
+    }
+
     /// Returns the number of jobs pending in this spoke
     #[inline]
     pub fn pending_job_len(&self) -> usize {
@@ -276,7 +280,7 @@ mod tests {
     #[test]
     fn can_create_spoke() {
         let s: Spoke = Spoke::new_from_now(10);
-        assert_eq!(s.job_list.len(), 0)
+        assert_eq!(s.job_list.len(), 0);
     }
 
     #[test]
@@ -286,7 +290,27 @@ mod tests {
         s.add_job(Job::new_auto_id(current_ms + 4000, "Hello Second Job!"));
         assert_eq!(s.job_list.len(), 1);
         s.add_job(Job::new_auto_id(current_ms + 6000, "Hello Second Job!"));
-        assert_eq!(s.job_list.len(), 2)
+        assert_eq!(s.job_list.len(), 2);
+    }
+
+    #[test]
+    fn owns_jobs() {
+        let current_ms = times::current_time_ms();
+        let mut s: Spoke = Spoke::new_from_now(10_000);
+        let j = Job::new_auto_id(current_ms + 4000, "Hello Second Job!");
+        let id = j.get_metadata().get_id();
+        s.add_job(j);
+        assert_eq!(
+            s.job_list.len(),
+            1,
+            "Adding a job should increase job list len"
+        );
+        assert!(s.owns_job(id), "Spoke should advertise ownership of job");
+
+        assert!(
+            !s.owns_job(Uuid::new_v4()),
+            "Spoke should not advertise ownership of unknown jobs"
+        );
     }
 
     #[test]

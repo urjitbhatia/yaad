@@ -1,17 +1,16 @@
-use std::collections::{BinaryHeap, BTreeMap, HashMap};
+use std::collections::{BinaryHeap, BTreeMap};
 use std::collections::binary_heap::PeekMut;
 
 use times;
 use spoke::{Spoke, BoundingSpokeTime};
 use job::Job;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct Hub {
     spoke_duration_ms: u64,
     bst_heap: BinaryHeap<BoundingSpokeTime>,
     bst_spoke_map: BTreeMap<BoundingSpokeTime, Spoke>,
-    job_iid_bst_map: HashMap<u64, BoundingSpokeTime>,
-    job_eid_bst_map: HashMap<u64, BoundingSpokeTime>,
     past_spoke: Spoke,
 }
 
@@ -26,10 +25,22 @@ impl Hub {
             spoke_duration_ms,
             bst_heap: BinaryHeap::new(),
             bst_spoke_map: BTreeMap::new(),
-            job_eid_bst_map: HashMap::new(),
-            job_iid_bst_map: HashMap::new(),
             past_spoke: Spoke::new(0, <u64>::max_value()),
         }
+    }
+
+    pub fn find_job_owner_spoke(&self, id: Uuid) -> Option<BoundingSpokeTime> {
+        if self.past_spoke.owns_job(id) {
+            return Some(self.past_spoke.get_bounds().clone());
+        }
+        let entry = self.bst_spoke_map
+            .iter()
+            .skip_while(|e| !e.1.owns_job(id))
+            .next();
+        if entry.is_some() {
+            return Some(entry.unwrap().0.clone());
+        }
+        None
     }
 
     fn add_spoke(&mut self, spoke: Spoke) {
@@ -58,7 +69,7 @@ impl Hub {
     }
 
     /// Add a new job to the Hub - the hub will find or create the right spoke for this job
-    pub fn add_job(&mut self, job: Job) {
+    pub fn add_job(&mut self, job: Job) -> &mut Hub {
         // If None, past spoke accepted the job, else find the right spoke for it
         println!("Adding job to hub. Job trigger: {}", job.trigger_at_ms());
         match self.maybe_add_job_to_past(job) {
@@ -66,9 +77,10 @@ impl Hub {
                 if self.add_job_to_spokes(j).is_some() {
                     panic!("Hub should always accept a job")
                 }
+                return self;
             }
-            None => (),
-        };
+            None => return self,
+        }
     }
 
     /// Adds a job to the correct spoke based on the Job's trigger time
@@ -324,16 +336,16 @@ mod tests {
     fn add_job_to_hub() {
         let start_time_ms = times::current_time_ms();
         let mut hub = Hub::new(TEST_SPOKE_DURATION_MS);
-        hub.add_job(Job::new_auto_id(start_time_ms + 2, "one spoke"));
-        hub.add_job(Job::new_auto_id(start_time_ms + 3, "one spoke"));
-        hub.add_job(Job::new_auto_id(
-            start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4,
-            "foo",
-        ));
-        hub.add_job(Job::new_auto_id(
-            start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 5,
-            "foo",
-        ));
+        hub.add_job(Job::new_auto_id(start_time_ms + 3, "one spoke"))
+            .add_job(Job::new_auto_id(start_time_ms + 4, "one spoke"))
+            .add_job(Job::new_auto_id(
+                start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4,
+                "foo",
+            ))
+            .add_job(Job::new_auto_id(
+                start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 3,
+                "foo",
+            ));
         assert_eq!(hub.bst_spoke_map.len(), 2);
         // wait for first spoke to become ready
         thread::park_timeout(Duration::from_millis(6));
@@ -346,5 +358,42 @@ mod tests {
 
         let spoke_walk_one = walk_one[0].walk();
         assert_eq!(spoke_walk_one.len(), 2);
+    }
+
+    #[test]
+    fn can_find_jobs() {
+        let start_time_ms = times::current_time_ms();
+        let mut hub = Hub::new(TEST_SPOKE_DURATION_MS);
+        let job_one_spoke = Job::new_auto_id(start_time_ms + 3, "one spoke");
+        let job_other_spoke =
+            Job::new_auto_id(start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4, "foo");
+
+        let job_one_id = job_one_spoke.get_metadata().get_id();
+        let job_other_id = job_other_spoke.get_metadata().get_id();
+
+        hub.add_job(job_one_spoke)
+            .add_job(Job::new_auto_id(start_time_ms + 4, "one spoke"))
+            .add_job(job_other_spoke)
+            .add_job(Job::new_auto_id(
+                start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 3,
+                "foo",
+            ));
+        assert_eq!(hub.bst_spoke_map.len(), 2);
+
+        assert!(hub.find_job_owner_spoke(job_one_id).is_some());
+        assert!(hub.find_job_owner_spoke(job_other_id).is_some());
+    }
+
+    #[test]
+    fn can_find_past_jobs() {
+        let start_time_ms = times::current_time_ms();
+        let mut hub = Hub::new(TEST_SPOKE_DURATION_MS);
+        let j = Job::new_auto_id(start_time_ms - 300, "one spoke");
+
+        let id = j.get_metadata().get_id();
+
+        hub.add_job(j);
+        assert_eq!(hub.bst_spoke_map.len(), 0);
+        assert!(hub.find_job_owner_spoke(id).is_some());
     }
 }
