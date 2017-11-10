@@ -42,12 +42,14 @@ pub fn demo() {
         }
 
         if job_counter == 10 {
+            println!("-----------------------------------------------");
             // Switch into drain mode...
             println!(
                 "Added: {} jobs, switching to job drain mode at time: {}",
                 job_counter,
                 times::current_time_ms()
             );
+            println!("-----------------------------------------------");
             while job_counter > 0 {
                 h.walk_jobs().iter().for_each(|j| {
                     println!(
@@ -61,6 +63,8 @@ pub fn demo() {
                     thread::park_timeout(Duration::from_millis(100));
                 });
             }
+
+            println!("Done with 10 jobs. Remaining: {}", job_counter);
         }
 
         thread::park_timeout(Duration::from_millis(15));

@@ -29,7 +29,7 @@ impl Hub {
         }
     }
 
-    pub fn find_job_owner_spoke(&self, id: Uuid) -> Option<BoundingSpokeTime> {
+    pub fn find_job_owner_bst(&self, id: Uuid) -> Option<BoundingSpokeTime> {
         if self.past_spoke.owns_job(id) {
             return Some(self.past_spoke.get_bounds().clone());
         }
@@ -52,20 +52,40 @@ impl Hub {
 
     /// Walk returns a Vector of Spokes that should be consumed next
     /// Calls to this method can return empty vectors if no spokes are ready yet.
-    pub fn walk(&mut self) -> Vec<Spoke> {
-        let mut ready_spokes: Vec<Spoke> = vec![];
+    pub fn walk(&mut self) -> Vec<Job> {
+        let mut ready_jobs: Vec<Job> = vec![];
 
+        // Iterate the Heap
         while let Some(peeked) = self.bst_heap.peek_mut() {
-            if peeked.is_ready() || peeked.is_expired() {
-                match self.bst_spoke_map.remove(&PeekMut::pop(peeked)) {
-                    Some(s) => ready_spokes.push(s),
-                    _ => (),
-                };
+            // If the BST is ready
+            if peeked.is_ready() {
+                // This spoke has jobs to deliver, get the spoke from the map
+                match self.bst_spoke_map.get_mut(&peeked) {
+                    Some(s) => {
+                        ready_jobs.append(s.walk().as_mut());
+                    }
+                    None => (),
+                }
             } else {
+                println!("Top bst not ready: {:?}", peeked);
                 break;
             }
         }
-        ready_spokes
+        self.prune_spokes();
+        ready_jobs
+    }
+
+    pub fn prune_spokes(&mut self) {
+        // Iterate the Heap
+
+        let to_remove: Vec<BoundingSpokeTime> = self.bst_spoke_map
+            .values()
+            .take_while(|s| s.is_expired() && s.pending_job_len() == 0)
+            .map(|s| s.get_bounds())
+            .collect();
+        for k in to_remove {
+            self.bst_spoke_map.remove(&k);
+        }
     }
 
     /// Add a new job to the Hub - the hub will find or create the right spoke for this job
@@ -110,6 +130,7 @@ impl Hub {
         } {
             // If we weren't able to assign this job yet, create a spoke that might accept it
             Some(j) => {
+                println!("Adding a new spoke to accomodate job: {:?}", job_bst);
                 self.add_spoke(Spoke::new_from_bounds(job_bst));
                 // Try adding job again, recursively
                 self.add_job_to_spokes(j)
@@ -123,7 +144,7 @@ impl Hub {
     fn maybe_add_job_to_past(&mut self, job: Job) -> Option<Job> {
         // If job is old, add to the past spoke
         let current_time_ms = times::current_time_ms();
-        if job.trigger_at_ms() <= current_time_ms {
+        if job.trigger_at_ms() < current_time_ms {
             // This job should be handed to the past spoke
             println!(
                 "This job: {} is older then current time: {}",
@@ -147,21 +168,10 @@ impl Hub {
 
     /// Returns a vec of all jobs that are ready to be consumed
     pub fn walk_jobs(&mut self) -> Vec<Job> {
-        let mut past_jobs: Vec<Job> = vec![];
-
-        for j in self.past_spoke.walk() {
-            past_jobs.push(j)
-        }
-
-        for mut s in self.walk() {
-            for j in s.walk() {
-                past_jobs.push(j)
-            }
-            if s.pending_job_len() > 0 {
-                self.add_spoke(s);
-            }
-        }
-        past_jobs
+        let mut jobs = self.past_spoke.walk();
+        println!("Collecting {} jobs from the past spoke", jobs.len());
+        jobs.append(self.walk().as_mut());
+        return jobs;
     }
 }
 
@@ -170,7 +180,7 @@ impl Hub {
 mod tests {
     const TEST_SPOKE_DURATION_MS: u64 = 10;
 
-    use super::{Spoke, Hub, Job, times};
+    use super::*;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use std::thread;
 
@@ -216,13 +226,15 @@ mod tests {
     fn walk_hub_with_spokes() {
         // |
         // |     spoke1  walk1([s1,])            walk2([])         spoke2   walk3([s2,])
-        // | s1<---------10ms--------->s1+10 .......~10ms....... s2<--------50ms--------->s2+50
+        // | s1<---------20ms--------->s1+10 .......~10ms....... s2<--------50ms--------->s2+50
         // |---------------------------------------------------------------------------------->time
         let mut h = Hub::new(TEST_SPOKE_DURATION_MS);
         let first_spoke_start = times::current_time_ms();
-
         // Create a spoke that starts now and add it to the hub
-        h.add_spoke(Spoke::new(first_spoke_start, 10));
+        let mut s1 = Spoke::new(first_spoke_start, 10);
+        s1.add_job(Job::new_auto_id(first_spoke_start + 2, "job"));
+        h.add_spoke(s1);
+
         assert_eq!(
             h.bst_heap.len(),
             1,
@@ -234,45 +246,48 @@ mod tests {
             "Should list ownership of the newly added spoke"
         );
 
-        let walk_one = h.walk();
+        // Wait for at least first spoke to be ready
+        thread::park_timeout(Duration::from_millis(15));
+
         assert_eq!(
-            walk_one.len(),
+            h.walk_jobs().len(),
             1,
-            "Should find a spoke that is ready to be walked"
-        );
-        assert_eq!(
-            h.bst_spoke_map.len(),
-            0,
-            "Should not own any spokes, it was already consumed"
+            "Should have 1 job ready at: {}",
+            times::current_time_ms()
         );
         assert_eq!(
             h.bst_heap.len(),
             0,
-            "Should not own any spokes, it was already consumed"
+            "Should have pruned spoke after consuming it"
         );
+        assert_eq!(
+            h.bst_spoke_map.len(),
+            0,
+            "Should have pruned spoke after consuming it"
+        );
+
 
         // Create another spoke that starts 10ms after the first spoke's starting time
         let second_spoke_start = times::current_time_ms() + 10;
-        h.add_spoke(Spoke::new(second_spoke_start, 50));
-        assert_eq!(h.bst_heap.len(), 1);
-        assert_eq!(h.bst_spoke_map.len(), 1);
+        let mut s2 = Spoke::new(second_spoke_start, 50);
+        s2.add_job(Job::new_auto_id(second_spoke_start + 22, "job"));
+        h.add_spoke(s2);
 
-        let walk_two = h.walk();
+        assert_eq!(h.bst_heap.len(), 1, "Should have 1 spoke");
+        assert_eq!(h.bst_spoke_map.len(), 1, "Should have 1 spoke");
+
+        // Wait for at least second spoke to be ready
+        thread::park_timeout(Duration::from_millis(TEST_SPOKE_DURATION_MS + 4));
+        assert_eq!(h.walk_jobs().len(), 1, "Hub should return jobs");
+
         assert_eq!(
-            walk_two.len(),
+            h.walk_jobs().len(),
             0,
-            "Hub should not return spokes that are still in the future"
+            "Hub should not return a job after all were consumed"
         );
 
-        thread::park_timeout(Duration::from_millis(10));
-        assert_eq!(h.bst_spoke_map.len(), 1);
-        assert_eq!(h.bst_heap.len(), 1);
-        let walk_three = h.walk();
-        assert_eq!(
-            walk_three.len(),
-            1,
-            "Hub should now return a spoke that's ready to go"
-        );
+        assert_eq!(h.bst_spoke_map.len(), 0);
+        assert_eq!(h.bst_heap.len(), 0);
     }
 
     #[test]
@@ -336,28 +351,30 @@ mod tests {
     fn add_job_to_hub() {
         let start_time_ms = times::current_time_ms();
         let mut hub = Hub::new(TEST_SPOKE_DURATION_MS);
+        // first spoke
         hub.add_job(Job::new_auto_id(start_time_ms + 3, "one spoke"))
-            .add_job(Job::new_auto_id(start_time_ms + 4, "one spoke"))
-            .add_job(Job::new_auto_id(
-                start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4,
-                "foo",
-            ))
-            .add_job(Job::new_auto_id(
+            .add_job(Job::new_auto_id(start_time_ms + 4, "one spoke"));
+
+        // next spoke
+        hub.add_job(Job::new_auto_id(
+            start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4,
+            "foo",
+        )).add_job(Job::new_auto_id(
                 start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 3,
                 "foo",
             ));
+
         assert_eq!(hub.bst_spoke_map.len(), 2);
         // wait for first spoke to become ready
-        thread::park_timeout(Duration::from_millis(6));
+        thread::park_timeout(Duration::from_millis(8));
+
         println!(
             "Test Diagnostic: current time ms: {}",
             times::current_time_ms()
         );
-        let mut walk_one = hub.walk();
-        assert_eq!(walk_one.len(), 1);
 
-        let spoke_walk_one = walk_one[0].walk();
-        assert_eq!(spoke_walk_one.len(), 2);
+        let mut walk_one = hub.walk_jobs();
+        assert_eq!(walk_one.len(), 2);
     }
 
     #[test]
@@ -380,8 +397,11 @@ mod tests {
             ));
         assert_eq!(hub.bst_spoke_map.len(), 2);
 
-        assert!(hub.find_job_owner_spoke(job_one_id).is_some());
-        assert!(hub.find_job_owner_spoke(job_other_id).is_some());
+        assert!(hub.find_job_owner_bst(job_one_id).is_some());
+        assert!(hub.find_job_owner_bst(job_other_id).is_some());
+
+        // Can't find unknown jobs
+        assert!(!hub.find_job_owner_bst(Uuid::new_v4()).is_some());
     }
 
     #[test]
@@ -394,6 +414,8 @@ mod tests {
 
         hub.add_job(j);
         assert_eq!(hub.bst_spoke_map.len(), 0);
-        assert!(hub.find_job_owner_spoke(id).is_some());
+        assert!(hub.find_job_owner_bst(id).is_some());
+        // Is Idempotent
+        assert!(hub.find_job_owner_bst(id).is_some());
     }
 }

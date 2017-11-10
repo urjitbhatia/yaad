@@ -18,6 +18,7 @@ use job::{Job, JobMetadata, JobBody};
 /// by this spoke.
 #[derive(Debug)]
 pub struct Spoke {
+    id: Uuid,
     bst: BoundingSpokeTime,
     job_id_map: HashMap<Uuid, JobBody>,
     job_list: BinaryHeap<JobMetadata>,
@@ -53,14 +54,12 @@ impl BoundingSpokeTime {
 
     #[inline]
     pub fn is_ready(&self) -> bool {
-        let now = times::current_time_ms();
-        self.start_time_ms <= now && now < self.end_time_ms
+        self.start_time_ms <= times::current_time_ms()
     }
 
     #[inline]
     pub fn is_expired(&self) -> bool {
-        let now = times::current_time_ms();
-        self.end_time_ms < now
+        self.end_time_ms < times::current_time_ms()
     }
 }
 
@@ -82,7 +81,9 @@ impl Spoke {
     pub fn new_from_bounds(bst: BoundingSpokeTime) -> Spoke {
         let job_id_map = HashMap::new();
         let job_list = BinaryHeap::new();
+        let id = Uuid::new_v4();
         Spoke {
+            id,
             bst,
             job_id_map,
             job_list,
@@ -337,11 +338,14 @@ mod tests {
         let current_time = times::current_time_ms();
         let mut s: Spoke = Spoke::new(current_time, 10_000);
         println!("Spoke list idempotent: {:p}", &s);
+
         s.add_job(Job::new_auto_id(current_time + 500, "I am Job"));
         println!("Spoke list idempotent: {:p}", &s);
+
         s.add_job(Job::new_auto_id(current_time + 500, "I am Job"));
         // wait 3/4 sec
         thread::park_timeout(Duration::from_millis(750));
+
         let first_job_set = s.walk();
         assert_eq!(
             first_job_set.len(),
