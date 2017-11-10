@@ -1,5 +1,4 @@
-use std::collections::{BinaryHeap, BTreeMap};
-use std::collections::binary_heap::PeekMut;
+use std::collections::{BTreeMap};
 
 use times;
 use spoke::{Spoke, BoundingSpokeTime};
@@ -63,7 +62,6 @@ impl Hub {
             .take_while(|s| s.is_expired() && s.pending_job_len() == 0)
             .map(|s| s.get_bounds())
             .collect();
-        println!("Found {} expired spokes to prune", to_remove.len());
         let mut prune_count = 0;
         for k in to_remove {
             if self.bst_spoke_map.remove(&k).is_some() {
@@ -154,7 +152,6 @@ impl Hub {
     /// Returns a vec of all jobs that are ready to be consumed
     pub fn walk_jobs(&mut self) -> Vec<Job> {
         let mut jobs = self.past_spoke.walk();
-        println!("Collecting {} jobs from the past spoke", jobs.len());
         jobs.append(self.walk().as_mut());
         return jobs;
     }

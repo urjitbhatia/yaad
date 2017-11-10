@@ -60,8 +60,8 @@ pub fn demo() {
                     );
                     job_counter -= 1;
                     println!("Remaining: {} jobs", job_counter);
-                    thread::park_timeout(Duration::from_millis(100));
                 });
+                thread::park_timeout(Duration::from_millis(100));
             }
 
             println!("Done with 10 jobs. Remaining: {}", job_counter);
