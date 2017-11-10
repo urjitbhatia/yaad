@@ -211,7 +211,8 @@ impl fmt::Display for Spoke {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "(Start time: {:?}, Duration: {:?} sec, NumJobs: {}, JobList: {:?})",
+            "(Id: {:?}\nStart time:\n{:?}, Duration:\n{:?} sec, NumJobs:\n{}, JobList:\n{:?})",
+            self.id,
             self.bst.start_time_ms,
             self.bst.end_time_ms,
             self.job_list.len(),
@@ -224,12 +225,7 @@ impl Ord for Spoke {
     /// A Spoke is greater than another spoke if it's start time is nearer in the future
     /// and it's end time is strictly less than the other's start time.
     fn cmp(&self, other: &Spoke) -> Ordering {
-        // Flip ordering
-        self.bst
-            .start_time_ms
-            .cmp(&other.bst.start_time_ms)
-            .then(self.bst.end_time_ms.cmp(&other.bst.end_time_ms))
-            .reverse()
+        self.bst.cmp(&other.bst)
     }
 }
 
@@ -253,10 +249,9 @@ impl Ord for BoundingSpokeTime {
     /// and it's end time is strictly less than the other's start time.
     fn cmp(&self, other: &BoundingSpokeTime) -> Ordering {
         // Flip ordering
-        self.start_time_ms
-            .cmp(&other.start_time_ms)
-            .then(self.end_time_ms.cmp(&other.end_time_ms))
-            .reverse()
+        self.start_time_ms.cmp(&other.start_time_ms).then(
+            self.end_time_ms.cmp(&other.end_time_ms),
+        )
     }
 }
 
@@ -398,11 +393,11 @@ mod tests {
     #[test]
     fn spoke_ordering() {
         let one = Spoke::new_from_now(5);
-        thread::park_timeout(Duration::from_millis(10));
+        thread::park_timeout(Duration::from_millis(5));
         let two = Spoke::new_from_now(5);
         assert!(
-            one > two,
-            "Spoke with time interval closer to now should be greater"
+            one < two,
+            "Spoke with time interval closer to now should be smaller"
         );
     }
 
