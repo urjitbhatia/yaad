@@ -1,5 +1,5 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::ops::Add;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[inline]
 /// Returns current time in ms - drops `nanosec` precision
@@ -27,7 +27,6 @@ pub fn ms_to_system_time(ms: u64) -> SystemTime {
 pub fn system_time_to_ms(system_time: SystemTime) -> u64 {
     duration_to_ms(system_time.duration_since(UNIX_EPOCH).unwrap())
 }
-
 
 #[cfg(test)]
 mod tests {

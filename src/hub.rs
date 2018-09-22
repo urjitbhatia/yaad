@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
-use times;
-use spoke::{Spoke, BoundingSpokeTime};
 use job::Job;
+use spoke::{BoundingSpokeTime, Spoke};
+use times;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -30,7 +30,8 @@ impl Hub {
         if self.past_spoke.owns_job(id) {
             return Some(self.past_spoke.get_bounds().clone());
         }
-        let entry = self.bst_spoke_map
+        let entry = self
+            .bst_spoke_map
             .iter()
             .skip_while(|e| !e.1.owns_job(id))
             .next();
@@ -57,7 +58,8 @@ impl Hub {
     }
 
     pub fn prune_spokes(&mut self) -> u32 {
-        let to_remove: Vec<BoundingSpokeTime> = self.bst_spoke_map
+        let to_remove: Vec<BoundingSpokeTime> = self
+            .bst_spoke_map
             .values()
             .take_while(|s| s.is_expired() && s.pending_job_len() == 0)
             .map(|s| s.get_bounds())
@@ -91,7 +93,8 @@ impl Hub {
         let job_bst = Hub::job_bounding_spoke_time(&job, self.spoke_duration_ms);
         match {
             // Try to skip as many bounds as possible : these bounds are before this job's bound
-            let next_spoke = self.bst_spoke_map
+            let next_spoke = self
+                .bst_spoke_map
                 .iter_mut()
                 .skip_while(|s| s.0 < &job_bst)
                 .next();
@@ -157,14 +160,13 @@ impl Hub {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     const TEST_SPOKE_DURATION_MS: u64 = 10;
 
     use super::*;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use std::thread;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[test]
     fn can_create_hub() {
@@ -235,7 +237,6 @@ mod tests {
             "Should have pruned spoke after consuming it"
         );
 
-
         // Create another spoke that starts 10ms after the first spoke's starting time
         let second_spoke_start = times::current_time_ms() + 10;
         let mut s2 = Spoke::new(second_spoke_start, 25);
@@ -280,7 +281,6 @@ mod tests {
         assert_eq!(h.prune_spokes(), 2, "Expired spokes are pruned");
     }
 
-
     /// This test checks that we can calculate if a Spoke should own a job - a spoke should own a
     /// job if that job's trigger time lies within the Spoke's duration.
     #[test]
@@ -319,9 +319,9 @@ mod tests {
             start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4,
             "foo",
         )).add_job(Job::new_auto_id(
-                start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 3,
-                "foo",
-            ));
+            start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 3,
+            "foo",
+        ));
 
         assert_eq!(
             hub.bst_spoke_map.len(),

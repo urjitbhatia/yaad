@@ -1,15 +1,15 @@
 //! A Spoke is a list of jobs whose trigger times fall within the Spoke's duration of
 //! responsibility.
 
-use std::collections::{BinaryHeap, HashMap};
-use std::collections::binary_heap::PeekMut;
-use std::fmt;
 use std::cmp::Ordering;
+use std::collections::binary_heap::PeekMut;
+use std::collections::{BinaryHeap, HashMap};
+use std::fmt;
 use times;
 use uuid::Uuid;
 
 // our module
-use job::{Job, JobMetadata, JobBody};
+use job::{Job, JobBody, JobMetadata};
 
 /// A Spoke is a time-bound chain of jobs
 ///
@@ -116,8 +116,8 @@ impl Spoke {
         if self.is_expired() {
             return Option::from(job);
         }
-        if self.bst.start_time_ms <= job.trigger_at_ms() &&
-            job.trigger_at_ms() < self.bst.end_time_ms
+        if self.bst.start_time_ms <= job.trigger_at_ms()
+            && job.trigger_at_ms() < self.bst.end_time_ms
         {
             // Only accept jobs that are this spoke's responsibility
             let jm = job.get_metadata();
@@ -239,8 +239,8 @@ impl PartialOrd for Spoke {
 
 impl PartialEq for Spoke {
     fn eq(&self, other: &Spoke) -> bool {
-        self.bst.start_time_ms.eq(&other.bst.start_time_ms) &
-            &self.bst.end_time_ms.eq(&other.bst.end_time_ms)
+        self.bst.start_time_ms.eq(&other.bst.start_time_ms)
+            & &self.bst.end_time_ms.eq(&other.bst.end_time_ms)
     }
 }
 
@@ -249,9 +249,9 @@ impl Ord for BoundingSpokeTime {
     /// and it's end time is strictly less than the other's start time.
     fn cmp(&self, other: &BoundingSpokeTime) -> Ordering {
         // Flip ordering
-        self.start_time_ms.cmp(&other.start_time_ms).then(
-            self.end_time_ms.cmp(&other.end_time_ms),
-        )
+        self.start_time_ms
+            .cmp(&other.start_time_ms)
+            .then(self.end_time_ms.cmp(&other.end_time_ms))
     }
 }
 
@@ -270,8 +270,8 @@ impl PartialEq for BoundingSpokeTime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
     use std::thread;
+    use std::time::Duration;
 
     #[test]
     fn can_create_spoke() {

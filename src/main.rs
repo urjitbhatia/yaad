@@ -25,7 +25,7 @@ fn main() {
                 // not implemented yet
                 // "consumer" => demo::consumer(),
                 // "producer" => demo::producer(),
-                _ => println!("Unknown mode. Exiting...")
+                _ => println!("Unknown mode. Exiting..."),
             }
         }
         Result::Err(r) => println!("Error parsing config: {:?}", r),

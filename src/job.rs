@@ -8,9 +8,9 @@
 //! execution time: a job whose trigger time is closer in the future is `greater` than a job that
 //! is due later.
 
-use uuid::{Uuid, UuidVersion};
 use std::cmp::Ordering;
 use times;
+use uuid::{Uuid, UuidVersion};
 
 ///The "Job" type has max possible values: u64::max_value() = 18446744073709551615.
 ///internal_id will overflow after max value - internal functioning should not be affected.
@@ -36,18 +36,16 @@ impl Job {
     /// TODO: This does not handle id collisions properly yet.
     pub fn new(id: Uuid, trigger_at_ms: u64, body: &str) -> Job {
         match id.get_version() {
-            Some(ver) => {
-                match ver {
-                    UuidVersion::Random => {
-                        let body = body.to_owned();
-                        Job {
-                            job_metadata: JobMetadata { id, trigger_at_ms },
-                            body: JobBody { body },
-                        }
+            Some(ver) => match ver {
+                UuidVersion::Random => {
+                    let body = body.to_owned();
+                    Job {
+                        job_metadata: JobMetadata { id, trigger_at_ms },
+                        body: JobBody { body },
                     }
-                    _ => panic!("Only uuid v4 ids are accepted"),
                 }
-            }
+                _ => panic!("Only uuid v4 ids are accepted"),
+            },
             _ => panic!("Only uuid v4 ids are accepted"),
         }
     }
@@ -175,11 +173,9 @@ mod tests {
         let j_one = Job::new(id, 100, "foo one");
         let j_two = Job::new(id, 100, "foo two");
         assert_eq!(
-            j_one,
-            j_two,
+            j_one, j_two,
             "Job: {:?} should be eq: {:?} when ids are same",
-            j_one,
-            j_two
+            j_one, j_two
         )
     }
 
