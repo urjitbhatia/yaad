@@ -1,14 +1,15 @@
 //! A Spoke is a list of jobs whose trigger times fall within the Spoke's duration of
 //! responsibility.
 
-use std::collections::BinaryHeap;
-use std::collections::binary_heap::PeekMut;
-use std::fmt;
 use std::cmp::Ordering;
+use std::collections::binary_heap::PeekMut;
+use std::collections::{BinaryHeap, HashMap};
+use std::fmt;
 use times;
+use uuid::Uuid;
 
 // our module
-use job::Job;
+use job::{Job, JobBody, JobMetadata};
 
 /// A Spoke is a time-bound chain of jobs
 ///
@@ -17,8 +18,11 @@ use job::Job;
 /// by this spoke.
 #[derive(Debug)]
 pub struct Spoke {
+    id: Uuid,
     bst: BoundingSpokeTime,
-    job_list: BinaryHeap<Job>,
+    job_id_map: HashMap<Uuid, JobBody>,
+    job_list: BinaryHeap<JobMetadata>,
+    // Todo rename to job_queue?
 }
 
 #[derive(Debug, Copy, Clone, Eq, Hash)]
@@ -50,14 +54,12 @@ impl BoundingSpokeTime {
 
     #[inline]
     pub fn is_ready(&self) -> bool {
-        let now = times::current_time_ms();
-        self.start_time_ms <= now && now < self.end_time_ms
+        self.start_time_ms <= times::current_time_ms()
     }
 
     #[inline]
     pub fn is_expired(&self) -> bool {
-        let now = times::current_time_ms();
-        self.end_time_ms < now
+        self.end_time_ms < times::current_time_ms()
     }
 }
 
@@ -77,8 +79,15 @@ impl Spoke {
     }
 
     pub fn new_from_bounds(bst: BoundingSpokeTime) -> Spoke {
+        let job_id_map = HashMap::new();
         let job_list = BinaryHeap::new();
-        Spoke { bst, job_list }
+        let id = Uuid::new_v4();
+        Spoke {
+            id,
+            bst,
+            job_id_map,
+            job_list,
+        }
     }
     /// Constructs a new Spoke - a time bound chain of jobs starting at the current time
     /// # Example
@@ -91,12 +100,11 @@ impl Spoke {
     ///```
     pub fn new(start_time_ms: u64, duration_ms: u64) -> Spoke {
         let end_time_ms = start_time_ms + duration_ms;
-        let job_list = BinaryHeap::new();
         let bst = BoundingSpokeTime {
             start_time_ms,
             end_time_ms,
         };
-        Spoke { bst, job_list }
+        Spoke::new_from_bounds(bst)
     }
 
     /// Add a new job into the Spoke - the job is optionally returned if the Spoke is not the right
@@ -108,11 +116,15 @@ impl Spoke {
         if self.is_expired() {
             return Option::from(job);
         }
-        if self.bst.start_time_ms <= job.trigger_at_ms() &&
-            job.trigger_at_ms() < self.bst.end_time_ms
+        if self.bst.start_time_ms <= job.trigger_at_ms()
+            && job.trigger_at_ms() < self.bst.end_time_ms
         {
             // Only accept jobs that are this spoke's responsibility
-            self.job_list.push(job);
+            let jm = job.get_metadata();
+
+            println!("Inserting jm: {:?}", jm);
+            self.job_id_map.insert(jm.get_id(), job.get_body());
+            self.job_list.push(jm);
             return Option::None;
         } else {
             // Return jobs that you don't want to accept
@@ -143,13 +155,29 @@ impl Spoke {
 
         while let Some(peeked) = self.job_list.peek_mut() {
             if peeked.is_ready() {
-                let j = PeekMut::pop(peeked);
-                ready_jobs.push(j)
+                let jm = PeekMut::pop(peeked);
+                match self.job_id_map.remove(&jm.get_id()) {
+                    Some(b) => ready_jobs.push(Job::new_from_metadata(jm, b)),
+                    None => (),
+                }
             } else {
                 break;
             }
         }
         ready_jobs
+    }
+
+    pub fn cancel_job(&mut self, id: Uuid) -> bool {
+        // Try to delete using internal id then
+        match self.job_id_map.remove(&id) {
+            Some(_) => true, // This does not remove from job list atm
+            //when walking it will just not point to anything
+            None => false,
+        }
+    }
+
+    pub fn owns_job(&self, id: Uuid) -> bool {
+        self.job_id_map.contains_key(&id)
     }
 
     /// Returns the number of jobs pending in this spoke
@@ -183,7 +211,8 @@ impl fmt::Display for Spoke {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "(Start time: {:?}, Duration: {:?} sec, NumJobs: {}, JobList: {:?})",
+            "(Id: {:?}\nStart time:\n{:?}, Duration:\n{:?} sec, NumJobs:\n{}, JobList:\n{:?})",
+            self.id,
             self.bst.start_time_ms,
             self.bst.end_time_ms,
             self.job_list.len(),
@@ -196,12 +225,7 @@ impl Ord for Spoke {
     /// A Spoke is greater than another spoke if it's start time is nearer in the future
     /// and it's end time is strictly less than the other's start time.
     fn cmp(&self, other: &Spoke) -> Ordering {
-        // Flip ordering
-        self.bst
-            .start_time_ms
-            .cmp(&other.bst.start_time_ms)
-            .then(self.bst.end_time_ms.cmp(&other.bst.end_time_ms))
-            .reverse()
+        self.bst.cmp(&other.bst)
     }
 }
 
@@ -215,8 +239,8 @@ impl PartialOrd for Spoke {
 
 impl PartialEq for Spoke {
     fn eq(&self, other: &Spoke) -> bool {
-        self.bst.start_time_ms.eq(&other.bst.start_time_ms) &&
-            self.bst.end_time_ms.eq(&other.bst.end_time_ms)
+        self.bst.start_time_ms.eq(&other.bst.start_time_ms)
+            & &self.bst.end_time_ms.eq(&other.bst.end_time_ms)
     }
 }
 
@@ -228,7 +252,6 @@ impl Ord for BoundingSpokeTime {
         self.start_time_ms
             .cmp(&other.start_time_ms)
             .then(self.end_time_ms.cmp(&other.end_time_ms))
-            .reverse()
     }
 }
 
@@ -240,30 +263,50 @@ impl PartialOrd for BoundingSpokeTime {
 
 impl PartialEq for BoundingSpokeTime {
     fn eq(&self, other: &BoundingSpokeTime) -> bool {
-        self.start_time_ms.eq(&other.start_time_ms) && self.end_time_ms.eq(&other.end_time_ms)
+        self.start_time_ms.eq(&other.start_time_ms) & &self.end_time_ms.eq(&other.end_time_ms)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Job, Spoke, times, BoundingSpokeTime};
-    use std::time::Duration;
+    use super::*;
     use std::thread;
+    use std::time::Duration;
 
     #[test]
     fn can_create_spoke() {
         let s: Spoke = Spoke::new_from_now(10);
-        assert_eq!(s.job_list.len(), 0)
+        assert_eq!(s.job_list.len(), 0);
     }
 
     #[test]
     fn can_add_jobs() {
         let current_ms = times::current_time_ms();
         let mut s: Spoke = Spoke::new_from_now(10_000);
-        s.add_job(Job::new(2u64, 2u64, current_ms + 4000, "Hello Second Job!"));
+        s.add_job(Job::new_auto_id(current_ms + 4000, "Hello Second Job!"));
         assert_eq!(s.job_list.len(), 1);
-        s.add_job(Job::new(1u64, 1u64, current_ms + 6000, "Hello Second Job!"));
-        assert_eq!(s.job_list.len(), 2)
+        s.add_job(Job::new_auto_id(current_ms + 6000, "Hello Second Job!"));
+        assert_eq!(s.job_list.len(), 2);
+    }
+
+    #[test]
+    fn owns_jobs() {
+        let current_ms = times::current_time_ms();
+        let mut s: Spoke = Spoke::new_from_now(10_000);
+        let j = Job::new_auto_id(current_ms + 4000, "Hello Second Job!");
+        let id = j.get_metadata().get_id();
+        s.add_job(j);
+        assert_eq!(
+            s.job_list.len(),
+            1,
+            "Adding a job should increase job list len"
+        );
+        assert!(s.owns_job(id), "Spoke should advertise ownership of job");
+
+        assert!(
+            !s.owns_job(Uuid::new_v4()),
+            "Spoke should not advertise ownership of unknown jobs"
+        );
     }
 
     #[test]
@@ -277,8 +320,8 @@ mod tests {
     fn walk_spoke_with_jobs() {
         let current_time = times::current_time_ms();
         let mut s: Spoke = Spoke::new(current_time, 1000);
-        s.add_job(Job::new(1u64, 1u64, current_time + 300, "I am Job"));
-        s.add_job(Job::new(1u64, 1u64, current_time + 523, "I am Job"));
+        s.add_job(Job::new_auto_id(current_time + 300, "I am Job"));
+        s.add_job(Job::new_auto_id(current_time + 523, "I am Job"));
         // wait 750 for jobs to be active
         thread::park_timeout(Duration::from_millis(750));
         let res = s.walk();
@@ -290,11 +333,14 @@ mod tests {
         let current_time = times::current_time_ms();
         let mut s: Spoke = Spoke::new(current_time, 10_000);
         println!("Spoke list idempotent: {:p}", &s);
-        s.add_job(Job::new(1u64, 1u64, current_time + 500, "I am Job"));
+
+        s.add_job(Job::new_auto_id(current_time + 500, "I am Job"));
         println!("Spoke list idempotent: {:p}", &s);
-        s.add_job(Job::new(1u64, 1u64, current_time + 500, "I am Job"));
+
+        s.add_job(Job::new_auto_id(current_time + 500, "I am Job"));
         // wait 3/4 sec
         thread::park_timeout(Duration::from_millis(750));
+
         let first_job_set = s.walk();
         assert_eq!(
             first_job_set.len(),
@@ -319,16 +365,12 @@ mod tests {
         let mut s: Spoke = Spoke::new(current_time, 20_000);
 
         // Accepts jobs that are with Spoke's duration
-        let j_accept: Job =
-            Job::new_without_external_id(1, current_time + 7000, "in spoke duration");
-        let jj_accept: Job =
-            Job::new_without_external_id(1, current_time + 11_000, "in spoke duration");
+        let j_accept: Job = Job::new_auto_id(current_time + 7000, "in spoke duration");
+        let jj_accept: Job = Job::new_auto_id(current_time + 11_000, "in spoke duration");
         // Rejects jobs that come after Spoke's duration
-        let j_reject: Job =
-            Job::new_without_external_id(1, current_time + 44_000, "beyond spoke duration");
+        let j_reject: Job = Job::new_auto_id(current_time + 44_000, "beyond spoke duration");
         // Rejects jobs that come before Spoke's duration
-        let jj_reject: Job =
-            Job::new_without_external_id(1, current_time - 2_000, "before spoke duration");
+        let jj_reject: Job = Job::new_auto_id(current_time - 2_000, "before spoke duration");
 
         assert!(
             s.add_job(j_accept).is_none(),
@@ -351,11 +393,11 @@ mod tests {
     #[test]
     fn spoke_ordering() {
         let one = Spoke::new_from_now(5);
-        thread::park_timeout(Duration::from_millis(10));
+        thread::park_timeout(Duration::from_millis(5));
         let two = Spoke::new_from_now(5);
         assert!(
-            one > two,
-            "Spoke with time interval closer to now should be greater"
+            one < two,
+            "Spoke with time interval closer to now should be smaller"
         );
     }
 
@@ -366,5 +408,25 @@ mod tests {
 
         let bst = BoundingSpokeTime::new(500, 799);
         assert!(spoke.get_bounds().contains(&bst));
+    }
+
+    #[test]
+    fn can_cancel_job() {
+        let current_ms = times::current_time_ms();
+        let mut s: Spoke = Spoke::new_from_now(10_000);
+
+        let j_one = Job::new_auto_id(current_ms + 600, "one");
+        let j_two = Job::new_auto_id(current_ms + 700, "two");
+
+        let j_one_id = j_one.get_metadata().get_id();
+        s.add_job(j_one);
+        s.add_job(j_two);
+
+        assert_eq!(s.pending_job_len(), 2);
+
+        // Cancel
+        assert!(s.cancel_job(j_one_id));
+        // Job is gone, more cancels are idempotent
+        assert!(!s.cancel_job(j_one_id));
     }
 }
