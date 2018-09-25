@@ -4,7 +4,7 @@ use std::env;
 #[derive(Debug, Deserialize)]
 pub struct Settings {
     pub mode: String,
-    pub count: Option<u8>,
+    pub count: Option<u16>,
 }
 
 impl Settings {
@@ -13,9 +13,8 @@ impl Settings {
 
         // Add in the current environment file
         // Default to 'consumer' env
-        let env = env::var("RUN_MODE").unwrap_or("consumer".into());
-        s.merge(File::with_name(&format!("config/{}", env)).required(false))?;
-
+        let env = env::var("RUN_MODE").unwrap_or("demo".into());
+        s.merge(File::with_name(&format!("config/{}", env)).required(true))?;
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
     }
