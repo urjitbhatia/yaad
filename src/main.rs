@@ -4,6 +4,7 @@ extern crate serde;
 extern crate statsd;
 extern crate uuid;
 extern crate chrono;
+extern crate colored;
 
 #[macro_use]
 extern crate serde_derive;

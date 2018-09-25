@@ -11,6 +11,7 @@ config = "0.9.0"
 serde_derive = "^1.0.8"
 serde = "^1.0.8"
 chrono = "0.4.6"
+colored = "1.6"
 
 [replace]
 "statsd:0.11.0" = { path = "../rust/rust-statsd" }

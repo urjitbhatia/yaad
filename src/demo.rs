@@ -1,14 +1,12 @@
+use colored::*;
+use hub::Hub;
+use job::Job;
 use rand::{thread_rng, Rng};
-use std::cell::Cell;
+use settings;
+use statsd::Client;
 use std::ops::Index;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Instant;
-
-use hub::Hub;
-use job::Job;
-use settings;
-use statsd::Client;
 use times;
 
 pub fn demo(conf: settings::Settings) {
@@ -25,7 +23,7 @@ pub fn demo(conf: settings::Settings) {
         .name("producer".into())
         .spawn(move || {
             let client = Client::new("127.0.0.1:8125", "yaad.").unwrap();
-            println!("producing {:?} jobs", max_jobs);
+            println!("{} {}", "Producing total jobs: ".green(), max_jobs);
             let job_sample_bodies = vec!["Hello ", "Hey ", "Hi "];
             let mut r = thread_rng();
             for job_counter in 0..max_jobs {
@@ -44,7 +42,7 @@ pub fn demo(conf: settings::Settings) {
                 client.incr("demojob.produced.count");
                 let trigger_at_from_now =
                     j.trigger_at_ms() as i64 - times::current_time_ms() as i64;
-                println!(
+                let log = format!(
                     "\nAdding demo job: {:?} :: \
                      Trigger at {:?} ms Current time: {:?}.  \
                      Trigger at {:?} ms from now \
@@ -55,10 +53,10 @@ pub fn demo(conf: settings::Settings) {
                     trigger_at_from_now,
                     job_counter
                 );
-                let p = Arc::clone(&hub_mutex_rc);
-                let mut hp = p.lock().unwrap();
+                println!("{}", log.green());
+                let mut h = hub_producer.lock().unwrap();
                 client.time("demojob.addjob.duration", || {
-                    hp.add_job(j);
+                    h.add_job(j);
                 });
             }
         }).unwrap();
@@ -77,13 +75,19 @@ pub fn demo(conf: settings::Settings) {
 
                 h.walk_jobs().iter().for_each(|j| {
                     println!(
-                        "Ready job: {:?} to be triggered at: {} current time: {}",
-                        j.get_body(),
-                        times::to_string(j.trigger_at_ms()),
-                        times::to_string(times::current_time_ms())
+                        "{}",
+                        format!(
+                            "Ready job: {:?} to be triggered at: {} current time: {}",
+                            j.get_body(),
+                            times::to_string(j.trigger_at_ms()),
+                            times::to_string(times::current_time_ms())
+                        ).blue()
                     );
                     job_counter += 1;
-                    println!("Processed: {} jobs", job_counter);
+                    println!(
+                        "{}",
+                        format!("Read total jobs so far: {}", job_counter).blue()
+                    );
                     client.incr("demojob.consumed.count");
                 });
 
@@ -97,11 +101,11 @@ pub fn demo(conf: settings::Settings) {
         }).unwrap();
 
     match producer_thread.join() {
-        Result::Ok(_) => println!("Producer thread finished ok"),
-        Result::Err(e) => println!("Producer thread errored {:?}", e),
+        Result::Ok(_) => println!("{}", "Producer thread finished ok".yellow()),
+        Result::Err(e) => println!("{} {:?}", "Producer thread errored".red(), e),
     }
     match consumer_thread.join() {
-        Result::Ok(_) => println!("Consumer thread finished ok"),
-        Result::Err(e) => println!("Consumer thread errored {:?}", e),
+        Result::Ok(_) => println!("{}", "Consumer thread finished ok".yellow()),
+        Result::Err(e) => println!("{} {:?}", "Consumer thread errored".red(), e),
     }
 }
