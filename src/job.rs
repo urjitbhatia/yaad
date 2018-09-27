@@ -15,9 +15,9 @@ use uuid::{Uuid, UuidVersion};
 ///The "Job" type has max possible values: u64::max_value() = 18446744073709551615.
 ///internal_id will overflow after max value - internal functioning should not be affected.
 #[derive(Debug)]
-pub struct Job {
+pub struct Job<'b> {
     job_metadata: JobMetadata,
-    body: JobBody,
+    body: &'b JobBody<'b>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -27,37 +27,34 @@ pub struct JobMetadata {
 }
 
 #[derive(Debug, Clone)]
-pub struct JobBody {
-    body: String,
+pub struct JobBody<'b> {
+    body: &'b str,
 }
 
-impl Job {
+impl<'b> Job<'b> {
     /// Creates a new job given an internal id, external id, trigger time in ms and the body.
     /// TODO: This does not handle id collisions properly yet.
-    pub fn new(id: Uuid, trigger_at_ms: u64, body: &str) -> Job {
+    pub fn new(id: Uuid, trigger_at_ms: u64, body: &'b str) -> &Job<'b> {
         match id.get_version() {
             Some(ver) => match ver {
-                UuidVersion::Random => {
-                    let body = body.to_owned();
-                    Job {
-                        job_metadata: JobMetadata { id, trigger_at_ms },
-                        body: JobBody { body },
-                    }
-                }
+                UuidVersion::Random => &Job {
+                    job_metadata: JobMetadata { id, trigger_at_ms },
+                    body: &JobBody { body },
+                },
                 _ => panic!("Only uuid v4 ids are accepted"),
             },
             _ => panic!("Only uuid v4 ids are accepted"),
         }
     }
 
-    pub fn new_from_metadata(job_metadata: JobMetadata, body: JobBody) -> Job {
+    pub fn new_from_metadata(job_metadata: JobMetadata, body: &'b JobBody) -> Job<'b> {
         Job { job_metadata, body }
     }
 
     /// Creates new job that doesn't need an external id. An external id will not be generated in
     /// this case.
-    pub fn new_auto_id(trigger_at_ms: u64, body: &str) -> Job {
-        Job::new(Uuid::new_v4(), trigger_at_ms, body)
+    pub fn new_auto_id(trigger_at_ms: u64, body: &'b str) -> &Job<'b> {
+        &Job::new(Uuid::new_v4(), trigger_at_ms, body)
     }
 
     /// Returns the job's trigger time as milliseconds from UnixEpoch.
@@ -73,8 +70,8 @@ impl Job {
     }
 
     #[inline]
-    pub fn get_body(&self) -> JobBody {
-        self.body.clone()
+    pub fn get_body(&self) -> &JobBody {
+        &self.body
     }
 
     #[inline]
@@ -106,7 +103,7 @@ impl JobMetadata {
     }
 }
 
-impl Ord for Job {
+impl<'b> Ord for Job<'b> {
     /// A Job is greater than another job if the job's trigger time will happen before the other's
     fn cmp(&self, other: &Job) -> Ordering {
         // Flip ordering - we want min heap
@@ -115,16 +112,16 @@ impl Ord for Job {
     }
 }
 
-impl Eq for Job {}
+impl<'b> Eq for Job<'b> {}
 
-impl PartialOrd for Job {
+impl<'b> PartialOrd for Job<'b> {
     fn partial_cmp(&self, other: &Job) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 /// PartialEq for a Job type ignores the `external_id` if it isn't set on either job being compared
-impl PartialEq for Job {
+impl<'b> PartialEq for Job<'b> {
     /// A job's equality depends on the equality of either internal or external id
     fn eq(&self, other: &Job) -> bool {
         self.job_metadata.eq(&other.job_metadata)

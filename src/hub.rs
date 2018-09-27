@@ -6,19 +6,19 @@ use times;
 use uuid::Uuid;
 
 #[derive(Debug)]
-pub struct Hub {
+pub struct Hub<'b> {
     spoke_duration_ms: u64,
-    bst_spoke_map: BTreeMap<BoundingSpokeTime, Spoke>,
-    past_spoke: Spoke,
+    bst_spoke_map: BTreeMap<BoundingSpokeTime, Spoke<'b>>,
+    past_spoke: Spoke<'b>,
 }
 
-impl Hub {
+impl<'b> Hub<'b> {
     /// Creates a new Hub - a hub orchestrates spokes and jobs. Hub is also responsible for ensuring
     /// that spokes are generated on the fly when a spokeless job is added to the hub.
     ///
     /// A Hub comes with a default `past` spoke which accepts any job whose trigger time is in the
     /// past. The hub will always try to walk this spoke first.
-    pub fn new(spoke_duration_ms: u64) -> Hub {
+    pub fn new(spoke_duration_ms: u64) -> Hub<'b> {
         Hub {
             spoke_duration_ms,
             bst_spoke_map: BTreeMap::new(),
@@ -41,8 +41,9 @@ impl Hub {
         None
     }
 
-    fn add_spoke(&mut self, spoke: Spoke) {
+    fn add_spoke(&'b mut self, spoke: Spoke<'b>) -> &'b mut Hub<'b> {
         self.bst_spoke_map.insert(spoke.get_bounds(), spoke);
+        self
     }
 
     /// Walk returns a Vector of Spokes that should be consumed next
@@ -74,22 +75,22 @@ impl Hub {
     }
 
     /// Add a new job to the Hub - the hub will find or create the right spoke for this job
-    pub fn add_job(&mut self, job: Job) -> &mut Hub {
+    pub fn add_job(&'b mut self, job: &'b Job<'b>) -> &mut Hub {
         // If None, past spoke accepted the job, else find the right spoke for it
         println!("Adding job to hub. Job trigger: {}", job.trigger_at_ms());
         match self.maybe_add_job_to_past(job) {
             Some(j) => {
-                if self.add_job_to_spokes(j).is_some() {
+                if self.add_job_to_spokes(&j).is_some() {
                     panic!("Hub should always accept a job")
                 }
-                return self;
             }
-            None => return self,
+            _ => (),
         }
+        self
     }
 
     /// Adds a job to the correct spoke based on the Job's trigger time
-    fn add_job_to_spokes(&mut self, job: Job) -> Option<Job> {
+    fn add_job_to_spokes(&'b mut self, job: &'b Job<'b>) -> Option<Job<'b>> {
         let job_bst = Hub::job_bounding_spoke_time(&job, self.spoke_duration_ms);
         match {
             // Try to skip as many bounds as possible : these bounds are before this job's bound
@@ -127,7 +128,7 @@ impl Hub {
 
     /// Attempts to add a job to the past spoke if the job is in the past and returns None.
     /// Otherwise, returns Some(job)
-    fn maybe_add_job_to_past(&mut self, job: Job) -> Option<Job> {
+    fn maybe_add_job_to_past(&mut self, job: &'b Job<'b>) -> Option<&'b Job> {
         // If job is old, add to the past spoke
         let current_time_ms = times::current_time_ms();
         if job.trigger_at_ms() < current_time_ms {
@@ -192,7 +193,7 @@ mod tests {
     #[test]
     fn can_add_job_to_past() {
         let mut h = Hub::new(TEST_SPOKE_DURATION_MS);
-        h.add_job(Job::new_auto_id(
+        h.add_job(&Job::new_auto_id(
             times::current_time_ms() - 10_000,
             "I am old",
         ));
@@ -213,7 +214,7 @@ mod tests {
         let first_spoke_start = times::current_time_ms();
         // Create a spoke that starts now and add it to the hub
         let mut s1 = Spoke::new(first_spoke_start, 10);
-        s1.add_job(Job::new_auto_id(first_spoke_start + 2, "job"));
+        s1.add_job(&Job::new_auto_id(first_spoke_start + 2, "job"));
         h.add_spoke(s1);
 
         assert_eq!(
@@ -240,7 +241,7 @@ mod tests {
         // Create another spoke that starts 10ms after the first spoke's starting time
         let second_spoke_start = times::current_time_ms() + 10;
         let mut s2 = Spoke::new(second_spoke_start, 25);
-        s2.add_job(Job::new_auto_id(second_spoke_start + 17, "job"));
+        s2.add_job(&Job::new_auto_id(second_spoke_start + 17, "job"));
         h.add_spoke(s2);
 
         assert_eq!(h.bst_spoke_map.len(), 1, "Should have 1 spoke");
@@ -311,14 +312,14 @@ mod tests {
         println!("-- Test Diagnostic: current_time_ms: {}\n", start_time_ms);
         let mut hub = Hub::new(TEST_SPOKE_DURATION_MS);
         // first spoke
-        hub.add_job(Job::new_auto_id(start_time_ms + 3, "one spoke"))
-            .add_job(Job::new_auto_id(start_time_ms + 4, "one spoke"));
+        hub.add_job(&Job::new_auto_id(start_time_ms + 3, "one spoke"))
+            .add_job(&Job::new_auto_id(start_time_ms + 4, "one spoke"));
 
         // next spoke
-        hub.add_job(Job::new_auto_id(
+        hub.add_job(&Job::new_auto_id(
             start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4,
             "foo",
-        )).add_job(Job::new_auto_id(
+        )).add_job(&Job::new_auto_id(
             start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 3,
             "foo",
         ));
@@ -357,10 +358,10 @@ mod tests {
         let job_one_id = job_one_spoke.get_metadata().get_id();
         let job_other_id = job_other_spoke.get_metadata().get_id();
 
-        hub.add_job(job_one_spoke)
-            .add_job(Job::new_auto_id(start_time_ms + 4, "one spoke"))
-            .add_job(job_other_spoke)
-            .add_job(Job::new_auto_id(
+        hub.add_job(&job_one_spoke)
+            .add_job(&Job::new_auto_id(start_time_ms + 4, "one spoke"))
+            .add_job(&job_other_spoke)
+            .add_job(&Job::new_auto_id(
                 start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 3,
                 "foo",
             ));
@@ -381,7 +382,7 @@ mod tests {
 
         let id = j.get_metadata().get_id();
 
-        hub.add_job(j);
+        hub.add_job(&j);
         assert_eq!(hub.bst_spoke_map.len(), 0);
         assert!(hub.find_job_owner_bst(id).is_some());
         // Is Idempotent

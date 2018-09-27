@@ -12,7 +12,9 @@ use times;
 pub fn demo(conf: settings::Settings) {
     println!("Running in demo mode. This will infinitely create a stream of jobs");
 
-    let hub_mutex_rc = Arc::new(Mutex::new(Hub::new(10_000)));
+    let global_hub = Hub::new(10_000);
+    let global_hub_mutex = Mutex::new(global_hub);
+    let hub_mutex_rc = Arc::new(global_hub_mutex);
     let hub_producer = Arc::clone(&hub_mutex_rc);
     let hub_consumer = Arc::clone(&hub_mutex_rc);
 
@@ -54,10 +56,16 @@ pub fn demo(conf: settings::Settings) {
                     job_counter
                 );
                 println!("{}", log.green());
-                let mut h = hub_producer.lock().unwrap();
-                client.time("demojob.addjob.duration", || {
-                    h.add_job(j);
-                });
+
+                let hub_producer_lock = hub_producer.lock();
+                match hub_producer_lock {
+                    Result::Ok(hpl) => {
+                        client.time("demojob.addjob.duration", move || {
+                            hpl.add_job(&j);
+                        });
+                    }
+                    _ => (),
+                }
             }
         }).unwrap();
 
