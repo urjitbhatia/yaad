@@ -6,3 +6,5 @@
 Cargo.lock
 /target/
 **/*.rs.bk
+
+vendor
