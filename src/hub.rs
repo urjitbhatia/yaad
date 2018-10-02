@@ -90,7 +90,6 @@ impl Hub {
 
     /// Adds a job to the correct spoke based on the Job's trigger time
     fn add_job_to_spokes(&mut self, job: Job) -> Option<Job> {
-        let job_bst = Hub::job_bounding_spoke_time(&job, self.spoke_duration_ms);
         match {
             // Try to skip as many bounds as possible : these bounds are before this job's bound
             let next_spoke = self
@@ -116,6 +115,7 @@ impl Hub {
         } {
             // If we weren't able to assign this job yet, create a spoke that might accept it
             Some(j) => {
+                let job_bst = Hub::job_bounding_spoke_time(&job, self.spoke_duration_ms);
                 println!("Adding a new spoke to accomodate job: {:?}", job_bst);
                 self.add_spoke(Spoke::new_from_bounds(job_bst));
                 // Try adding job again, recursively

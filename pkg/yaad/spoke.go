@@ -146,6 +146,11 @@ func (s *Spoke) ID() uuid.UUID {
 	return s.id
 }
 
+// AsPriorityItem returns a spoke as a prioritizable Item
+func (s *Spoke) AsPriorityItem() *Item {
+	return &Item{index: 0, priority: s.start, value: s}
+}
+
 // -- Implement Sort.Interface on Spokes ---//
 
 // SpokesByTime implements sort.Interface for Spokes

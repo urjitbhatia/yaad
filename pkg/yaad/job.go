@@ -59,6 +59,12 @@ func (j *Job) IsReady() bool {
 	return time.Now().After(j.triggerAt)
 }
 
+// asBound returns spokeBound for a hypothetical spoke that should hold this job
+func (j *Job) asBound(spokeSpan time.Duration) spokeBound {
+	start := time.Unix(0, int64(1000*(j.triggerAt.Nanosecond()/1000)))
+	return spokeBound{start: start, end: start.Add(spokeSpan)}
+}
+
 // JobsByTime implements sort.Interface for a collection of jobs //
 type JobsByTime []*Job
 
