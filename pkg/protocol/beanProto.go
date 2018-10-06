@@ -45,7 +45,8 @@ var ErrUnknownCmd errResponse = []byte(`UNKNOWN_COMMAND\r\n`)
 
 // Server is a yaad server
 type Server struct {
-	l net.Listener
+	l   net.Listener
+	srv BeanstalkdSrv
 }
 
 // Connection implements a yaad + beanstalkd protocol server
@@ -55,9 +56,14 @@ type Connection struct {
 	defaultTube Tube
 }
 
-// NewServer returns a pointer to a new yaad server
-func NewServer() *Server {
-	return &Server{}
+// NewStubServer returns a pointer to a new yaad server
+func NewStubServer() *Server {
+	return &Server{srv: NewSrvStub()}
+}
+
+// NewYaadServer returns a pointer to a new yaad server
+func NewYaadServer() *Server {
+	return &Server{srv: NewSrvYaad()}
 }
 
 // Listen to connections
@@ -95,11 +101,10 @@ func (s *Server) ListenAndServe(protocol, address string) error {
 		// Handle the connection in a new goroutine.
 		// The loop then returns to accepting, so that
 		// multiple connections may be served concurrently.
-		srv := NewSrvStub()
-		dt, _ := srv.getTube("default")
+		dt, _ := s.srv.getTube("default")
 		go serve(&Connection{
 			Conn:        textproto.NewConn(conn),
-			srv:         srv,
+			srv:         s.srv,
 			defaultTube: dt})
 	}
 }

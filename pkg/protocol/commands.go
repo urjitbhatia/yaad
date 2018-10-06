@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -58,6 +60,7 @@ func (conn *Connection) pauseTube(args []string) error {
 }
 
 func (conn *Connection) put(args []string, body []byte) error {
+	logrus.Warn("protocol putting job with args: %+v", args)
 	pri, _ := strconv.ParseInt(args[0], 10, 32)
 	delay, _ := strconv.Atoi(args[1])
 	ttr, _ := strconv.Atoi(args[2])

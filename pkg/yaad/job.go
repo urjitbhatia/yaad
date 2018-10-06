@@ -1,11 +1,10 @@
 package yaad
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/satori/go.uuid"
 )
 
 // Job is the basic unit of work in yaad
@@ -32,7 +31,7 @@ func NewJob(id string, triggerAt time.Time, b *[]byte) *Job {
 // NewJobAutoID creates a job a job id assigned automatically
 func NewJobAutoID(triggerAt time.Time, b *[]byte) *Job {
 	return &Job{
-		id:        uuid.NewV4().String(),
+		id:        fmt.Sprintf("%d", NextID()),
 		triggerAt: triggerAt,
 		body:      b,
 	}
