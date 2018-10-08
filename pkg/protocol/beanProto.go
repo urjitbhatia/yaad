@@ -112,34 +112,33 @@ func (s *Server) ListenAndServe(protocol, address string) error {
 func serve(conn *Connection) {
 	for {
 		line, err := conn.ReadLine()
-		if err == nil {
-			if line == "quit" {
-				err := conn.Close()
-				logrus.Error(err)
-				return
-			}
-			parts := strings.Split(line, " ")
-			cmd := parts[0]
+		if err != nil || line == "quit" {
+			err := conn.Close()
+			logrus.Error(err)
+			return
+		}
 
-			logrus.Debugf("Serving cmd: %s", cmd)
-			switch cmd {
-			case listTubes:
-				conn.listTubes()
-			case listTubeUsed:
-				conn.listTubeUsed()
-			case pauseTube:
-				conn.pauseTube(parts[1:])
-			case put:
-				body, _ := conn.ReadLineBytes()
-				conn.put(parts[1:], body)
-			case reserveWithTimeout, reserve:
-				conn.reserve()
-			case deleteJob:
-				conn.deleteJob(parts[1:])
-			default:
-				// Echo cmd by default
-				conn.Writer.PrintfLine("%s", line)
-			}
+		parts := strings.Split(line, " ")
+		cmd := parts[0]
+
+		logrus.Debugf("Serving cmd: %s", cmd)
+		switch cmd {
+		case listTubes:
+			conn.listTubes()
+		case listTubeUsed:
+			conn.listTubeUsed()
+		case pauseTube:
+			conn.pauseTube(parts[1:])
+		case put:
+			body, _ := conn.ReadLineBytes()
+			conn.put(parts[1:], body)
+		case reserveWithTimeout, reserve:
+			conn.reserve()
+		case deleteJob:
+			conn.deleteJob(parts[1:])
+		default:
+			// Echo cmd by default
+			conn.Writer.PrintfLine("%s", line)
 		}
 	}
 }

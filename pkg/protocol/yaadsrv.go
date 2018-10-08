@@ -61,7 +61,6 @@ func (t *TubeYaad) pauseTube(delay time.Duration) error {
 }
 
 func (t *TubeYaad) put(delay int, pri int32, body []byte, ttr int) (string, error) {
-	logrus.Warn("IPPUTTING")
 	j := yaad.NewJobAutoID(time.Now().Add(time.Second*time.Duration(delay)), &body)
 	j.SetOpts(pri, time.Duration(ttr)*time.Second)
 
@@ -72,6 +71,7 @@ func (t *TubeYaad) put(delay int, pri int32, body []byte, ttr int) (string, erro
 
 func (t *TubeYaad) reserve() *Job {
 	// Walk with iterator pattern?
+	logrus.Debug("yaad srv reserve")
 	for _, j := range *t.hub.Walk() {
 		return &Job{
 			body: *j.Body(),
@@ -79,17 +79,14 @@ func (t *TubeYaad) reserve() *Job {
 			size: len(*j.Body()),
 		}
 	}
+	logrus.Debug("yaad srv reserve done")
 	return nil
 }
 
+// Todo: handle cancelations for reserved jobs
 func (t *TubeYaad) deleteJob(id int) error {
 
 	strID := strconv.Itoa(id)
 	t.hub.CancelJob(strID)
-	_, ok := t.reserved[strID]
-	if ok {
-		delete(t.reserved, strID)
-		return nil
-	}
-	return ErrJobNotFound
+	return nil
 }
