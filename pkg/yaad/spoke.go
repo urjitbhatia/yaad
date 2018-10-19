@@ -15,6 +15,8 @@ type Spoke struct {
 	*spokeBound
 	jobMap   sync.Map
 	jobQueue JobsByTime
+
+	lock sync.Mutex
 }
 
 // -- Spoke -- //
@@ -31,12 +33,16 @@ func NewSpoke(start, end time.Time) *Spoke {
 	return &Spoke{id: uuid.NewV4(),
 		jobMap:     sync.Map{},
 		jobQueue:   JobsByTime{},
-		spokeBound: &spokeBound{start, end}}
+		spokeBound: &spokeBound{start, end},
+		lock:       sync.Mutex{}}
 }
 
 // AddJob submits a job to the spoke. If the spoke cannot take responsibility
 // of this job, it will return it as it is, otherwise nil is returned
 func (s *Spoke) AddJob(j *Job) *Job {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	if s.IsExpired() {
 		return j
 	}
@@ -61,6 +67,8 @@ func (s *Spoke) AddJob(j *Job) *Job {
 // Walk returns a pointer to an array of pointers to Jobs
 // (no copy operations)
 func (s *Spoke) Walk() *[]*Job {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	ready := []*Job{}
 
 	j := s.Next()
@@ -73,6 +81,9 @@ func (s *Spoke) Walk() *[]*Job {
 
 // Next returns the next ready job
 func (s *Spoke) Next() *Job {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	if len(s.jobQueue) == 0 {
 		return nil
 	}
@@ -88,6 +99,9 @@ func (s *Spoke) Next() *Job {
 
 // CancelJob will try to delete a job that hasn't been consumed yet
 func (s *Spoke) CancelJob(id string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	if _, ok := s.jobMap.Load(id); ok {
 		s.jobMap.Delete(id)
 		for i, j := range s.jobQueue {
@@ -101,12 +115,18 @@ func (s *Spoke) CancelJob(id string) {
 
 // OwnsJob returns true if a job by given id is owned by this spoke
 func (s *Spoke) OwnsJob(id string) bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	_, ok := s.jobMap.Load(id)
 	return ok
 }
 
 // PendingJobsLen returns the number of jobs remaining in this spoke
 func (s *Spoke) PendingJobsLen() int {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	return s.jobQueue.Len()
 }
 
