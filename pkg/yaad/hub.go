@@ -125,21 +125,6 @@ func (h *Hub) AddSpoke(s *Spoke) {
 	heap.Push(h.spokes, s.AsPriorityItem())
 }
 
-// Walk returns a Vector of Jobs that should be consumed next
-func (h *Hub) Walk() *[]*Job {
-	ready := []*Job{}
-
-	// collect jobs from past spoke
-	ready = append(ready, *h.pastSpoke.Walk()...)
-	logrus.Debugf("Got %d jobs from past spoke", len(ready))
-
-	for j := h.Next(); j != nil; j = h.Next() {
-		ready = append(ready, j)
-	}
-
-	return &ready
-}
-
 // Next returns the next job that is ready now or returns nil.
 func (h *Hub) Next() *Job {
 	h.lock.Lock()

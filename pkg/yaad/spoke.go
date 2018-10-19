@@ -1,7 +1,7 @@
 package yaad
 
 import (
-	"sort"
+	"container/heap"
 	"sync"
 	"time"
 
@@ -14,7 +14,7 @@ type Spoke struct {
 	id uuid.UUID
 	*spokeBound
 	jobMap   sync.Map
-	jobQueue JobsByTime
+	jobQueue *PriorityQueue
 
 	lock sync.Mutex
 }
@@ -30,9 +30,11 @@ func NewSpokeFromNow(duration time.Duration) *Spoke {
 
 // NewSpoke creates a new spoke to hold jobs
 func NewSpoke(start, end time.Time) *Spoke {
+	jq := &PriorityQueue{}
+	heap.Init(jq)
 	return &Spoke{id: uuid.NewV4(),
 		jobMap:     sync.Map{},
-		jobQueue:   JobsByTime{},
+		jobQueue:   jq,
 		spokeBound: &spokeBound{start, end},
 		lock:       sync.Mutex{}}
 }
@@ -57,26 +59,11 @@ func (s *Spoke) AddJob(j *Job) *Job {
 				"spokeEnd":     s.end.UnixNano(),
 			}).Debug("Accepting job")
 		s.jobMap.Store(j.id, j)
-		s.jobQueue = append(s.jobQueue, j)
+		heap.Push(s.jobQueue, j.AsPriorityItem())
 		return nil
 	}
 
 	return j
-}
-
-// Walk returns a pointer to an array of pointers to Jobs
-// (no copy operations)
-func (s *Spoke) Walk() *[]*Job {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	ready := []*Job{}
-
-	j := s.Next()
-	for j != nil {
-		ready = append(ready, j)
-		j = s.Next()
-	}
-	return &ready
 }
 
 // Next returns the next ready job
@@ -84,15 +71,17 @@ func (s *Spoke) Next() *Job {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if len(s.jobQueue) == 0 {
+	if s.jobQueue.Len() == 0 {
 		return nil
 	}
-	sort.Sort(s.jobQueue)
-	if time.Now().After(s.jobQueue[0].triggerAt) {
-		var j *Job
-		j, s.jobQueue = s.jobQueue[0], s.jobQueue[1:]
-		s.jobMap.Delete(j.id)
-		return j
+	i := heap.Pop(s.jobQueue)
+	if i != nil {
+		j := i.(*Item).value.(*Job)
+		if j.triggerAt.Before(time.Now()) {
+			return j
+		}
+		// No need to continue looking if the smallest item is still in the future
+		heap.Push(s.jobQueue, i)
 	}
 	return nil
 }
@@ -104,9 +93,9 @@ func (s *Spoke) CancelJob(id string) {
 
 	if _, ok := s.jobMap.Load(id); ok {
 		s.jobMap.Delete(id)
-		for i, j := range s.jobQueue {
-			if j.id == id {
-				s.jobQueue = append(s.jobQueue[:i], s.jobQueue[i+1:]...)
+		for i, j := range *s.jobQueue {
+			if j.value.(*Job).id == id {
+				heap.Remove(s.jobQueue, i)
 				break
 			}
 		}

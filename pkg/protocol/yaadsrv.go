@@ -31,7 +31,7 @@ func NewSrvYaad() BeanstalkdSrv {
 		name:     "default",
 		reserved: make(map[string]*yaad.Job),
 		paused:   false,
-		hub:      yaad.NewHub(time.Minute * 10),
+		hub:      yaad.NewHub(time.Second * 5),
 	}
 	y.tubes[t.name] = t
 	return &y
