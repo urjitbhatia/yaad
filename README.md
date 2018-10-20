@@ -28,3 +28,7 @@ A Special spoke called the `Past Spoke` is maintained by the `Hub` to handle inc
 whose `trigger time` is in the past. The `Hub` walks this spoke before walking any spoke at
 the start of each rotation. This way, we maintain a total order on `trigger_at` times for all
 Jobs that we accept responsibility for.
+
+## TODO
+- seems like something is not releasing memory
+- break out hub locks into read/write mutex
