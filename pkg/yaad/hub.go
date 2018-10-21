@@ -132,9 +132,6 @@ func (h *Hub) Next() *Job {
 	}
 	// Checked past spoke
 
-	// Fix the heap
-	heap.Init(h.spokes)
-
 	// Find a job in current spoke
 	// If current is empty and now expired, prune it...
 	if h.currentSpoke != nil {
@@ -149,6 +146,9 @@ func (h *Hub) Next() *Job {
 
 	// No currently assigned spoke
 	if h.currentSpoke == nil {
+		// Fix the heap
+		heap.Init(h.spokes)
+
 		if h.spokes.Len() == 0 {
 			logrus.Debug("No spokes")
 			// No spokes - can't do anything. Return
