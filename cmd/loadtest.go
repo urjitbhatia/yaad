@@ -73,6 +73,7 @@ func runLoadTest() {
 		"MaxJobs":        jobs,
 		"MaxConnections": connections,
 		"MaxDelaySec":    maxDelaySec,
+		"MinDelaySec":    minDelaySec,
 		"EnqueueMode":    enqueueMode,
 		"DequeueMode":    dequeueMode,
 		"Addr":           addr,
@@ -145,14 +146,20 @@ func dequeue(deqWG *sync.WaitGroup, c int, conn *beanstalk.Conn, deqJobs chan st
 		for {
 			id, body, err := conn.Reserve(time.Second * 1)
 			if err != nil {
-				switch err {
-				case beanstalk.ErrTimeout:
-					// ok?
+				cerr, ok := err.(beanstalk.ConnError)
+				if !ok {
+					logrus.WithError(err).Fatalf("expected a beanstalkd ConnError - error type unknown")
+				}
+				if ok && cerr.Err == beanstalk.ErrTimeout {
+					// no jobs ready yet - this returns err timout
+					// break this batch iteration, wait for next tick
+					logrus.Infof("Reserve timedout...")
 					continue
-				default:
+				} else {
 					logrus.WithError(err).Fatalf("Failed to dequeue for worker: %d", c)
 				}
 			}
+			logrus.Infof("Reserved: %d", id)
 
 			if enableTolerance {
 				parts := bytes.Split(body, []byte(` `))
