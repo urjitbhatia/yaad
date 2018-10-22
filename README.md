@@ -32,3 +32,4 @@ Jobs that we accept responsibility for.
 ## TODO
 - seems like something is not releasing memory
 - break out hub locks into read/write mutex
+- `ulimit -Sv 500000` 500mb mem limit for load testing mem leaks locally
