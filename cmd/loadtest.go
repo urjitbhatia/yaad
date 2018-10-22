@@ -133,7 +133,9 @@ func runLoadTest() {
 		}
 	}
 
+	logrus.Info("waiting for enqueue to end")
 	enqWG.Wait()
+	logrus.Info("waiting for dequeue to end")
 	deqWG.Wait()
 }
 
