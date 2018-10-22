@@ -21,7 +21,7 @@ const (
 	deleteJob          string = "delete"
 )
 
-func (conn *Connection) listTubes() {
+func listTubesCmd(conn *Connection) {
 	// listsYML, _ := yaml.Marshal(conn.srv.listTubes())
 
 	// preamble := fmt.Sprintf("OK %d", len(listsYML))
@@ -29,11 +29,11 @@ func (conn *Connection) listTubes() {
 	// conn.Writer.PrintfLine("%s", listsYML)
 }
 
-func (conn *Connection) listTubeUsed() {
+func listTubeUsedCmd(conn *Connection) {
 	conn.Writer.PrintfLine("USING foo")
 }
 
-func (conn *Connection) pauseTube(args []string) error {
+func pauseTubeCmd(conn *Connection, args []string) error {
 	// if len(args) != 2 {
 	// 	return errors.New("Pause tube missing args")
 	// }
@@ -54,7 +54,7 @@ func (conn *Connection) pauseTube(args []string) error {
 	return nil
 }
 
-func (conn *Connection) put(args []string, body []byte) error {
+func putCmd(conn *Connection, args []string, body []byte) error {
 	logrus.Debugf("protocol putting job with args: %s", args)
 	pri, _ := strconv.ParseInt(args[0], 10, 32)
 	delay, _ := strconv.Atoi(args[1])
@@ -66,19 +66,16 @@ func (conn *Connection) put(args []string, body []byte) error {
 	return nil
 }
 
-func (conn *Connection) reserve(timeoutSec string) {
+func reserveCmd(conn *Connection, timeoutSec string) {
 	j := conn.defaultTube.reserve(timeoutSec)
 	if j != nil {
 		conn.PrintfLine("RESERVED %s %d", j.id, j.size)
 		conn.W.Write(j.body)
 		conn.PrintfLine("")
-		return
 	}
-
-	conn.PrintfLine("TIMED_OUT")
 }
 
-func (conn *Connection) deleteJob(args []string) {
+func deleteJobCmd(conn *Connection, args []string) {
 	id, _ := strconv.Atoi(args[0])
 	err := conn.defaultTube.deleteJob(id)
 	if err != nil {
