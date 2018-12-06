@@ -19,3 +19,10 @@ start-metrics-container:
 
 run-demo:
 	RUN_MODE=demo cargo run
+
+go-dep:
+	dep ensure
+
+go-build: go-dep
+	 GOOS=linux GOARCH=amd64 go build -o yaad .
+

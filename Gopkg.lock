@@ -221,6 +221,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/DataDog/datadog-go/statsd",
     "github.com/classdojo/governor/metrics",
     "github.com/kr/beanstalk",
     "github.com/onsi/ginkgo",
@@ -229,7 +230,6 @@
     "github.com/satori/go.uuid",
     "github.com/sirupsen/logrus",
     "github.com/spf13/cobra",
-    "gopkg.in/yaml.v2",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
