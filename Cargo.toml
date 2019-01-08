@@ -14,4 +14,4 @@ chrono = "0.4.6"
 colored = "1.6"
 
 [replace]
-"statsd:0.11.0" = { path = "../rust/rust-statsd" }
+"statsd:0.11.0" = { path = "../rust-statsd" }
