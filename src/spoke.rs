@@ -116,9 +116,8 @@ impl Spoke {
         if self.is_expired() {
             return Option::from(job);
         }
-        if self.bst.start_time_ms <= job.trigger_at_ms()
-            && job.trigger_at_ms() < self.bst.end_time_ms
-        {
+        let job_trigger_at_ms = job.trigger_at_ms();
+        if self.bst.start_time_ms <= job_trigger_at_ms && job_trigger_at_ms < self.bst.end_time_ms {
             // Only accept jobs that are this spoke's responsibility
             let jm = job.get_metadata();
 
@@ -152,26 +151,41 @@ impl Spoke {
     /// ```
     pub fn walk(&mut self) -> Vec<Job> {
         let mut ready_jobs: Vec<Job> = vec![];
-
-        while let Some(peeked) = self.job_list.peek_mut() {
-            if peeked.is_ready() {
-                let jm = PeekMut::pop(peeked);
-                match self.job_id_map.remove(&jm.get_id()) {
-                    Some(b) => ready_jobs.push(Job::new_from_metadata(jm, b)),
-                    None => (),
-                }
-            } else {
-                break;
-            }
+        while let Some(next) = self.next() {
+            ready_jobs.push(next);
         }
         ready_jobs
+    }
+
+    /// next fetches the next job that is ready to be consumed
+    ///
+    /// if no job is ready to be consumed, None is returned.
+    /// The call does not block.
+    pub fn next(&mut self) -> Option<Job> {
+        // peeked is possible value at the head of the binary heap
+        let peeked = self.job_list.peek_mut();
+        match peeked {
+            Some(p) => {
+                if p.is_ready() {
+                    let jm = PeekMut::pop(p);
+                    match self.job_id_map.remove(&jm.get_id()) {
+                        Some(b) => Option::from(Job::new_from_metadata(jm, b)),
+                        None => Option::None,
+                    }
+                } else {
+                    Option::None
+                }
+            }
+            None => Option::None,
+        }
     }
 
     pub fn cancel_job(&mut self, id: Uuid) -> bool {
         // Try to delete using internal id then
         match self.job_id_map.remove(&id) {
             Some(_) => true, // This does not remove from job list atm
-            //when walking it will just not point to anything
+            // when walking it will just not point to anything and the metadata will be dropped
+            // releasing metadata memory
             None => false,
         }
     }
@@ -310,6 +324,25 @@ mod tests {
     }
 
     #[test]
+    fn next_empty_spoke() {
+        let mut s: Spoke = Spoke::new_from_now(1000);
+        let res = s.next();
+        assert!(res.is_none());
+    }
+
+    #[test]
+    fn next_spoke_with_jobs() {
+        let current_time = times::current_time_ms();
+        let mut s: Spoke = Spoke::new(current_time, 1000);
+        s.add_job(Job::new_auto_id(current_time + 300, "I am Job"));
+        s.add_job(Job::new_auto_id(current_time + 523, "I am Job"));
+        // wait 750 for jobs to be active
+        thread::park_timeout(Duration::from_millis(750));
+        let res = s.next();
+        assert!(res.is_some());
+    }
+
+    #[test]
     fn walk_empty_spoke() {
         let mut s: Spoke = Spoke::new_from_now(1000);
         let res = s.walk();
@@ -332,11 +365,8 @@ mod tests {
     fn walk_spoke_with_jobs_idempotent() {
         let current_time = times::current_time_ms();
         let mut s: Spoke = Spoke::new(current_time, 10_000);
-        println!("Spoke list idempotent: {:p}", &s);
 
         s.add_job(Job::new_auto_id(current_time + 500, "I am Job"));
-        println!("Spoke list idempotent: {:p}", &s);
-
         s.add_job(Job::new_auto_id(current_time + 500, "I am Job"));
         // wait 3/4 sec
         thread::park_timeout(Duration::from_millis(750));
