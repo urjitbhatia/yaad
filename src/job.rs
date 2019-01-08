@@ -10,6 +10,7 @@
 
 use std::cmp::Ordering;
 use times;
+use temporal_state::{Temporal, TemporalState};
 use uuid::{Uuid, UuidVersion};
 
 ///The "Job" type has max possible values: u64::max_value() = 18446744073709551615.
@@ -153,6 +154,19 @@ impl PartialEq for JobMetadata {
     /// A job's equality depends on the equality of either internal or external id
     fn eq(&self, other: &JobMetadata) -> bool {
         self.id.eq(&other.id)
+    }
+}
+
+impl Temporal for Job {
+    fn as_temporal_state(&self) -> TemporalState {
+        let now = times::current_time_ms();
+        let delta = now - self.job_metadata.trigger_at_ms;
+        if delta == 0 {
+            return TemporalState::Current
+        } else if delta > 0 {
+            return TemporalState::Future
+        }
+        return TemporalState::Past
     }
 }
 
