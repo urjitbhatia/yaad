@@ -318,7 +318,8 @@ mod tests {
         hub.add_job(Job::new_auto_id(
             start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 4,
             "foo",
-        )).add_job(Job::new_auto_id(
+        ))
+        .add_job(Job::new_auto_id(
             start_time_ms + TEST_SPOKE_DURATION_MS * 2 + 3,
             "foo",
         ));
@@ -337,7 +338,7 @@ mod tests {
             times::current_time_ms()
         );
 
-        let mut walk_one = hub.walk_jobs();
+        let walk_one = hub.walk_jobs();
         assert_eq!(
             walk_one.len(),
             2,

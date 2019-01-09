@@ -1,10 +1,10 @@
+extern crate chrono;
+extern crate colored;
 extern crate config;
 extern crate rand;
 extern crate serde;
 extern crate statsd;
 extern crate uuid;
-extern crate chrono;
-extern crate colored;
 
 #[macro_use]
 extern crate serde_derive;
@@ -15,8 +15,8 @@ pub mod hub;
 pub mod job;
 pub mod settings;
 pub mod spoke;
-pub mod times;
 pub mod temporal_state;
+pub mod times;
 
 fn main() {
     let settings = settings::Settings::new();

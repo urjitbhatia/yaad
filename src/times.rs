@@ -1,6 +1,6 @@
+use chrono::{TimeZone, Utc};
 use std::ops::Add;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use chrono::{TimeZone, Utc};
 
 #[inline]
 /// Returns current time in ms - drops `nanosec` precision
@@ -31,7 +31,7 @@ pub fn system_time_to_ms(system_time: SystemTime) -> u64 {
 
 #[inline]
 pub fn to_string(ms: u64) -> String {
-    Utc.timestamp((ms as i64)/1000, 0).to_string()
+    Utc.timestamp((ms as i64) / 1000, 0).to_string()
 }
 
 #[cfg(test)]

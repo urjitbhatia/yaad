@@ -59,7 +59,8 @@ pub fn demo(conf: settings::Settings) {
                     h.add_job(j);
                 });
             }
-        }).unwrap();
+        })
+        .unwrap();
 
     let consumer_thread = thread::Builder::new()
         .name("consumer".into())
@@ -81,7 +82,8 @@ pub fn demo(conf: settings::Settings) {
                             j.get_body(),
                             times::to_string(j.trigger_at_ms()),
                             times::to_string(times::current_time_ms())
-                        ).blue()
+                        )
+                        .blue()
                     );
                     job_counter += 1;
                     println!(
@@ -98,7 +100,8 @@ pub fn demo(conf: settings::Settings) {
                 // thread::sleep(time::Duration::from_millis(100));
                 thread::yield_now();
             }
-        }).unwrap();
+        })
+        .unwrap();
 
     match producer_thread.join() {
         Result::Ok(_) => println!("{}", "Producer thread finished ok".yellow()),

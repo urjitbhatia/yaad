@@ -9,8 +9,8 @@
 //! is due later.
 
 use std::cmp::Ordering;
-use times;
 use temporal_state::{Temporal, TemporalState};
+use times;
 use uuid::{Uuid, UuidVersion};
 
 ///The "Job" type has max possible values: u64::max_value() = 18446744073709551615.
@@ -162,11 +162,11 @@ impl Temporal for Job {
         let now = times::current_time_ms();
         let delta = now - self.job_metadata.trigger_at_ms;
         if delta == 0 {
-            return TemporalState::Current
+            return TemporalState::Current;
         } else if delta > 0 {
-            return TemporalState::Future
+            return TemporalState::Future;
         }
-        return TemporalState::Past
+        return TemporalState::Past;
     }
 }
 
