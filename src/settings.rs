@@ -5,6 +5,7 @@ use std::env;
 pub struct Settings {
     pub mode: String,
     pub count: Option<u16>,
+    pub addr: Option<std::net::SocketAddr>,
 }
 
 impl Settings {
@@ -12,7 +13,7 @@ impl Settings {
         let mut s = Config::new();
 
         // Add in the current environment file
-        // Default to 'consumer' env
+        // Default to 'demo' env
         let env = env::var("RUN_MODE").unwrap_or("demo".into());
         s.merge(File::with_name(&format!("config/{}", env)).required(true))?;
         // You can deserialize (and thus freeze) the entire configuration as

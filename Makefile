@@ -19,3 +19,6 @@ start-metrics-container:
 
 run-demo:
 	RUN_MODE=demo cargo run
+
+run-beanstalkd:
+	RUST_LOG=yaad=debug RUN_MODE=beanstalkd cargo run

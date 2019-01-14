@@ -1,13 +1,13 @@
 use colored::*;
-use hub::Hub;
-use job::Job;
 use rand::{thread_rng, Rng};
 use settings;
 use statsd::Client;
 use std::ops::Index;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use times;
+use yaad::hub::Hub;
+use yaad::job::Job;
+use yaad::times;
 
 pub fn demo(conf: settings::Settings) {
     println!("Running in demo mode. This will infinitely create a stream of jobs");

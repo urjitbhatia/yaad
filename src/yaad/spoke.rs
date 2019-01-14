@@ -1,15 +1,15 @@
 //! A Spoke is a list of jobs whose trigger times fall within the Spoke's duration of
 //! responsibility.
 
+use super::times;
 use std::cmp::Ordering;
 use std::collections::binary_heap::PeekMut;
 use std::collections::{BinaryHeap, HashMap};
 use std::fmt;
-use times;
 use uuid::Uuid;
 
 // our module
-use job::{Job, JobBody, JobMetadata};
+use super::job::{Job, JobBody, JobMetadata};
 
 /// A Spoke is a time-bound chain of jobs
 ///

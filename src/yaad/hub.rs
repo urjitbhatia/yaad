@@ -1,8 +1,7 @@
+use super::job::Job;
+use super::spoke::{BoundingSpokeTime, Spoke};
+use super::times;
 use std::collections::BTreeMap;
-
-use job::Job;
-use spoke::{BoundingSpokeTime, Spoke};
-use times;
 use uuid::Uuid;
 
 #[derive(Debug)]

@@ -6,31 +6,44 @@ extern crate serde;
 extern crate statsd;
 extern crate uuid;
 
+extern crate tokio;
+#[macro_use]
+extern crate futures;
+extern crate bytes;
+
+#[macro_use]
+extern crate log;
+extern crate env_logger;
+
 #[macro_use]
 extern crate serde_derive;
 
 // our modules
-pub mod demo;
-pub mod hub;
-pub mod job;
-pub mod settings;
-pub mod spoke;
-pub mod temporal_state;
-pub mod times;
+mod demo;
+mod protocols;
+mod settings;
+mod yaad;
+
+use std::error::Error;
+
+extern crate pretty_env_logger;
 
 fn main() {
+    pretty_env_logger::init_timed();
+
     let settings = settings::Settings::new();
     match settings {
         Result::Ok(r) => {
-            println!("Config parsed OK: {:?}", r);
+            info!("Config parsed OK: {:?}", r);
             match r.mode.as_ref() {
                 "demo" => demo::demo(r),
-                // not implemented yet
-                // "consumer" => demo::consumer(),
-                // "producer" => demo::producer(),
-                _ => println!("Unknown mode. Exiting..."),
+                "beanstalkd" => protocols::beanstalkd::run(r),
+                _ => info!("Unknown mode. Exiting..."),
             }
         }
-        Result::Err(r) => println!("Error parsing config: {:?}", r),
+        Result::Err(r) => {
+            info!("Error parsing config: {:?}", r);
+            info!("Error source: {:?}", r.source());
+        }
     }
 }

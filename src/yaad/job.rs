@@ -8,9 +8,9 @@
 //! execution time: a job whose trigger time is closer in the future is `greater` than a job that
 //! is due later.
 
+use super::temporal_state::{Temporal, TemporalState};
+use super::times;
 use std::cmp::Ordering;
-use temporal_state::{Temporal, TemporalState};
-use times;
 use uuid::{Uuid, UuidVersion};
 
 ///The "Job" type has max possible values: u64::max_value() = 18446744073709551615.
